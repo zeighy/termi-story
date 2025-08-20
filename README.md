@@ -4,6 +4,10 @@ Termi-Story is a web-based application that simulates a command-line terminal, d
 
 It provides a complete toolkit for story creators, including a secure admin panel to build a virtual filesystem, write scripts, and manage players, while offering players an immersive, retro-style terminal experience.
 
+Player DEMO: [https://remote-terminal.lainsy.net](https://remote-terminal.lainsy.net)
+DEMO login: kshaw
+DEMO player password: imnotfromfailtech
+
 # What is Termi-Story?
 
 At its core, Termi-Story is a **game engine** disguised as a terminal. Instead of navigating a world with graphics, players explore a virtual filesystem, reading text files for clues, and running simple script files (.app) to solve puzzles and advance the story.
