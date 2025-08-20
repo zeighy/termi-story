@@ -1,0 +1,74 @@
+body {
+    background-color: var(--background-color, #1a1a1a);
+    color: var(--text-color, #00ff00);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 16px;
+    margin: 0;
+}
+
+#terminal-container {
+    padding: 10px;
+    width: 100vw;
+    height: 100vh;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column; 
+}
+
+#terminal-output {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.motd {
+    color: #888;
+}
+
+.output-line {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.command-line {
+    display: flex;
+}
+
+.prompt-path-display, .prompt {
+    margin-right: 8px;
+    white-space: nowrap;
+}
+
+#terminal-input-line {
+    display: flex;
+    padding-top: 5px;
+    position: relative; 
+}
+
+#terminal-input {
+    flex-grow: 1;
+    background-color: transparent;
+    border: none;
+    color: var(--text-color, #00ff00);
+    font-family: inherit;
+    font-size: inherit;
+    outline: none;
+    padding: 0; /* Align with password-dots */
+    line-height: inherit; /* Align with password-dots */
+}
+
+#terminal-input.password-mask {
+    color: transparent; 
+}
+
+#password-dots {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none; 
+    color: var(--text-color, #00ff00);
+    font-family: inherit;
+    font-size: inherit;
+    padding: inherit;
+    line-height: inherit;
+}
