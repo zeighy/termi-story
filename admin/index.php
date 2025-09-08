@@ -25,7 +25,9 @@ $admin = new Admin($db);
     <div class="header">
         <h1>Filesystem Manager</h1>
         <div>
+            <a href="index.php" class="nav-link">Filesystem</a>
             <a href="users.php" class="nav-link">User Management</a>
+            <a href="theme.php" class="nav-link">Theme Editor</a>
             <a href="logout.php">Logout</a>
         </div>
     </div>
