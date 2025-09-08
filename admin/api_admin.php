@@ -22,6 +22,9 @@ $data = $input['data'] ?? [];
 $id = $input['id'] ?? null;
 
 switch ($action) {
+    case 'get_fs_tree':
+        echo $admin->getFilesystemTreeJson();
+        exit();
     // Filesystem Actions
     case 'add_item':
         $response = $admin->addItem($data);
