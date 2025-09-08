@@ -31,6 +31,18 @@ $users = $admin->getAllUsers();
         </div>
     </div>
 
+    <div class="help-section">
+        <div class="help-title">Help & Info</div>
+        <div class="help-content">
+            <p>This page allows you to manage user accounts. Users created here can log in to the public-facing terminal.</p>
+            <ul>
+                <li><b>Add User:</b> Use the "Add New User" form on the right to create a new user. A password is required.</li>
+                <li><b>Edit User:</b> Click the "Edit" button next to a user to load their details into the form. You can update their username and password. If the password field is left blank, their current password will be kept.</li>
+                <li><b>Delete User:</b> Click the "Delete" button to permanently remove a user account.</li>
+            </ul>
+        </div>
+    </div>
+
     <div class="container">
         <div class="filesystem-viewer">
             <h2>Player Accounts</h2>
@@ -77,5 +89,19 @@ $users = $admin->getAllUsers();
     </div>
     
     <script src="assets/users.js"></script>
+    <script>
+        document.querySelectorAll('.help-title').forEach(item => {
+            item.addEventListener('click', event => {
+                const content = item.nextElementSibling;
+                if (content.style.display === "block") {
+                    content.style.display = "none";
+                    item.classList.remove('open');
+                } else {
+                    content.style.display = "block";
+                    item.classList.add('open');
+                }
+            });
+        });
+    </script>
 </body>
 </html>

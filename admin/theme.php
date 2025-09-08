@@ -29,6 +29,18 @@ $themeSettings = $admin->getThemeSettings();
         </div>
     </div>
 
+    <div class="help-section" style="max-width: 800px; margin: auto; margin-bottom: 20px;">
+        <div class="help-title">Help & Info</div>
+        <div class="help-content">
+            <p>This page allows you to customize the appearance of the public-facing terminal.</p>
+            <ul>
+                <li><b>Branding & Text:</b> Change the title that appears in the browser tab and the greeting messages that users see.</li>
+                <li><b>Terminal Colors:</b> Use the color pickers to change the various colors of the terminal interface. The changes will be reflected instantly for any user who reloads the terminal.</li>
+                <li><b>Saving:</b> Click the "Save Theme" button to apply your changes.</li>
+            </ul>
+        </div>
+    </div>
+
     <div class="container-full">
         <div class="form-container" style="width: 100%; max-width: 800px; margin: auto;">
             <form id="theme-form">
@@ -81,6 +93,19 @@ $themeSettings = $admin->getThemeSettings();
                 formResponse.style.color = 'red';
             }
             formResponse.textContent = result.message;
+        });
+
+        document.querySelectorAll('.help-title').forEach(item => {
+            item.addEventListener('click', event => {
+                const content = item.nextElementSibling;
+                if (content.style.display === "block") {
+                    content.style.display = "none";
+                    item.classList.remove('open');
+                } else {
+                    content.style.display = "block";
+                    item.classList.add('open');
+                }
+            });
         });
     </script>
 </body>

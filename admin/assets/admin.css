@@ -146,3 +146,28 @@ button:hover {
     padding: 8px 15px;
     border-radius: 4px;
 }
+
+.help-section {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+.help-title {
+    padding: 10px 15px;
+    cursor: pointer;
+    font-weight: bold;
+    background-color: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+}
+.help-title::after {
+    content: ' ▼';
+    float: right;
+}
+.help-content {
+    padding: 15px;
+    display: none;
+}
+.help-content p {
+    margin-top: 0;
+}
