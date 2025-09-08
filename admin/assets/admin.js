@@ -68,8 +68,10 @@ $(function () {
             parentIdInput.value = node.id;
             selectedDirName.textContent = node.text;
         } else {
-            // If a file is selected, open the edit modal
-            openEditModal(node.id);
+            // If a file is selected, set the parent to the file's parent
+            parentIdInput.value = node.parent;
+            const parentNode = $('#fs-tree').jstree(true).get_node(node.parent);
+            selectedDirName.textContent = parentNode ? parentNode.text : '/';
         }
     });
 

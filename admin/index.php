@@ -31,6 +31,19 @@ $admin = new Admin($db);
             <a href="logout.php">Logout</a>
         </div>
     </div>
+
+    <div class="help-section">
+        <div class="help-title">Help & Info</div>
+        <div class="help-content">
+            <p>This page allows you to manage the filesystem that users will interact with on the public-facing terminal.</p>
+            <ul>
+                <li><b>File Tree:</b> The tree on the left displays the current file and folder structure.</li>
+                <li><b>Actions:</b> To <strong>Edit</strong> or <strong>Delete</strong> an item, right-click on it in the tree to open the context menu.</li>
+                <li><b>Adding Items:</b> To add a new file or directory, first click on the parent directory in the tree where you want to add it. Then, fill out the "Add New Item" form on the right.</li>
+            </ul>
+        </div>
+    </div>
+
     <div class="container">
         <div class="filesystem-viewer">
             <h2>Current Filesystem</h2>
@@ -111,5 +124,19 @@ $admin = new Admin($db);
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
     <script src="assets/admin.js"></script>
+    <script>
+        document.querySelectorAll('.help-title').forEach(item => {
+            item.addEventListener('click', event => {
+                const content = item.nextElementSibling;
+                if (content.style.display === "block") {
+                    content.style.display = "none";
+                    item.classList.remove('open');
+                } else {
+                    content.style.display = "block";
+                    item.classList.add('open');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
