@@ -102,17 +102,24 @@ class Terminal {
             return ['output' => "Access Denied. File is locked.\nHint: {$hint}\nUse: unlock {$filename} [password]"];
         }
 
-        return ['output' => htmlspecialchars($file['content'])];
+        return ['output' => htmlspecialchars_decode($file['content'], ENT_QUOTES)];
     }
     
     private function _commandCd($args) {
         if (empty($args)) {
-            $_SESSION['current_directory_id'] = 1;
-            return ['output' => ''];
+            return ['output' => "usage: cd [directory]\n  cd ..    - Go up one level\n  cd /     - Go to root directory"];
         }
         $targetDirName = $args[0];
 
+        if ($targetDirName === '/') {
+            $_SESSION['current_directory_id'] = 1;
+            return ['output' => ''];
+        }
+
         if ($targetDirName === '..') {
+            if ($this->currentDirId == 1) {
+                return ['output' => '']; // Already at root
+            }
             $this->db->query("SELECT parent_id FROM filesystem WHERE id = :currentDirId");
             $this->db->bind(':currentDirId', $this->currentDirId);
             $current = $this->db->single();
@@ -128,7 +135,7 @@ class Terminal {
             if ($target) {
                 $_SESSION['current_directory_id'] = $target['id'];
             } else {
-                return ['output' => "cd: {$targetDirName}: No such directory"];
+                return ['output' => "cd: " . htmlspecialchars($targetDirName) . ": No such directory"];
             }
         }
         return ['output' => ''];

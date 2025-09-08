@@ -12,29 +12,29 @@ require_once '../src/Admin.php';
 
 $db = new Database();
 $admin = new Admin($db);
-$filesystemTree = $admin->getFilesystemTree();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Admin Panel - Filesystem</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
     <link rel="stylesheet" href="assets/admin.css">
 </head>
 <body>
     <div class="header">
         <h1>Filesystem Manager</h1>
         <div>
+            <a href="index.php" class="nav-link">Filesystem</a>
             <a href="users.php" class="nav-link">User Management</a>
+            <a href="theme.php" class="nav-link">Theme Editor</a>
             <a href="logout.php">Logout</a>
         </div>
     </div>
     <div class="container">
         <div class="filesystem-viewer">
             <h2>Current Filesystem</h2>
-            <ul id="fs-tree">
-                <?php echo $filesystemTree; ?>
-            </ul>
+            <div id="fs-tree"></div>
         </div>
         <div class="form-container">
             <h2>Add New Item</h2>
@@ -108,6 +108,8 @@ $filesystemTree = $admin->getFilesystemTree();
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
     <script src="assets/admin.js"></script>
 </body>
 </html>

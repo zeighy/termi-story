@@ -10,54 +10,21 @@ class Admin {
 
     // --- Filesystem Methods ---
 
-    public function getFilesystemTree() {
-        $this->db->query("SELECT * FROM filesystem ORDER BY parent_id, type DESC, name");
+    public function getFilesystemTreeJson() {
+        $this->db->query("SELECT id, parent_id, name, type FROM filesystem ORDER BY parent_id, type DESC, name");
         $items = $this->db->resultSet();
         
-        $children = [];
+        $tree = [];
         foreach ($items as $item) {
-            if ($item['parent_id'] !== null) {
-                $children[$item['parent_id']][] = $item;
-            }
+            $tree[] = [
+                'id' => (string)$item['id'],
+                'parent' => $item['parent_id'] === null ? '#' : (string)$item['parent_id'],
+                'text' => htmlspecialchars($item['name']),
+                'type' => $item['type']
+            ];
         }
         
-        $rootItem = null;
-        foreach($items as $item) {
-            if($item['id'] == 1) {
-                $rootItem = $item;
-                break;
-            }
-        }
-        
-        return $this->buildTreeHtml([$rootItem], $children, '/');
-    }
-
-    private function buildTreeHtml($parentItems, $children, $currentPath) {
-        $html = '<ul>';
-        foreach ($parentItems as $item) {
-            $isDir = $item['type'] === 'dir';
-            $class = $isDir ? 'dir' : 'file';
-            $icon = $isDir ? '[D]' : '[F]';
-            $path = rtrim($currentPath, '/') . '/' . $item['name'];
-            
-            $buttons = '';
-            if ($item['id'] != 1) {
-                $buttons = "<div class='item-actions'>
-                                <button class='edit-btn' data-id='{$item['id']}'>Edit</button>
-                                <button class='delete-btn' data-id='{$item['id']}'>Delete</button>
-                            </div>";
-            }
-            
-            $html .= "<li class='{$class}' data-id='{$item['id']}' data-path='{$path}'>";
-            $html .= "<span class='item-name'>{$icon} " . htmlspecialchars($item['name']) . "</span>" . $buttons;
-            
-            if ($isDir && isset($children[$item['id']])) {
-                $html .= $this->buildTreeHtml($children[$item['id']], $children, $path);
-            }
-            $html .= '</li>';
-        }
-        $html .= '</ul>';
-        return $html;
+        return json_encode($tree);
     }
 
     public function getItem($id) {
@@ -88,7 +55,7 @@ class Admin {
         $this->db->bind(':parent_id', $data['parent_id']);
         $this->db->bind(':name', $name);
         $this->db->bind(':type', $data['type']);
-        $this->db->bind(':content', ($data['type'] !== 'dir') ? ($data['content'] ?? '') : null);
+        $this->db->bind(':content', ($data['type'] !== 'dir') ? htmlspecialchars($data['content'] ?? '', ENT_QUOTES, 'UTF-8') : null);
         $this->db->bind(':password', $password);
         $this->db->bind(':password_hint', !empty($data['password_hint']) ? $data['password_hint'] : null);
         $this->db->bind(':is_hidden', isset($data['is_hidden']) ? 1 : 0);
@@ -139,7 +106,7 @@ class Admin {
         $this->db->query($sql);
         $this->db->bind(':id', $data['id']);
         $this->db->bind(':name', $name);
-        $this->db->bind(':content', ($item['type'] !== 'dir') ? ($data['content'] ?? '') : null);
+        $this->db->bind(':content', ($item['type'] !== 'dir') ? htmlspecialchars($data['content'] ?? '', ENT_QUOTES, 'UTF-8') : null);
         $this->db->bind(':password', $password);
         $this->db->bind(':password_hint', !empty($data['password_hint']) ? $data['password_hint'] : null);
         $this->db->bind(':is_hidden', isset($data['is_hidden']) && $data['is_hidden'] ? 1 : 0);
