@@ -17,6 +17,11 @@ $admin = new Admin($db);
 $response = ['success' => false];
 
 $input = json_decode(file_get_contents('php://input'), true);
+
+if ($input === null) {
+    $input = $_POST;
+}
+
 $action = $input['action'] ?? null;
 $data = $input['data'] ?? [];
 $id = $input['id'] ?? null;
