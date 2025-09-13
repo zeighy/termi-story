@@ -1,0 +1,107 @@
+-- Termi-Story SQL Setup Script
+-- This script will create all necessary tables and default data.
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `filesystem`
+--
+CREATE TABLE `filesystem` (
+  `id` int(11) NOT NULL,
+  `parent_id` int(11) DEFAULT NULL,
+  `name` varchar(100) NOT NULL,
+  `type` enum('dir','txt','app') NOT NULL,
+  `content` text DEFAULT NULL,
+  `is_hidden` tinyint(1) DEFAULT 0,
+  `password` varchar(255) DEFAULT NULL,
+  `password_hint` varchar(255) DEFAULT NULL,
+  `owner_id` int(11) DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `filesystem`
+--
+INSERT INTO `filesystem` (`id`, `parent_id`, `name`, `type`, `content`, `is_hidden`, `password`, `password_hint`, `owner_id`) VALUES
+(1, NULL, '/', 'dir', NULL, 0, NULL, NULL, 1);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `themes`
+--
+CREATE TABLE `themes` (
+  `id` int(11) NOT NULL,
+  `name` varchar(50) NOT NULL,
+  `value` text NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `themes`
+--
+INSERT INTO `themes` (`id`, `name`, `value`) VALUES
+(1, 'background_color', '#1a1a1a'),
+(2, 'text_color', '#00ff00'),
+(3, 'prompt_color_user', '#50fa7b'),
+(4, 'prompt_color_path', '#bd93f9'),
+(5, 'terminal_title', 'Termi-Story'),
+(6, 'login_greeting', 'PLAYER LOGIN'),
+(7, 'motd', 'Welcome to the system. Type \'help\' for a list of commands.');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `users`
+--
+CREATE TABLE `users` (
+  `id` int(11) NOT NULL,
+  `username` varchar(50) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `home_directory_id` int(11) DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `filesystem`
+--
+ALTER TABLE `filesystem`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_name_in_parent` (`parent_id`,`name`);
+
+--
+-- Indexes for table `themes`
+--
+ALTER TABLE `themes`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indexes for table `users`
+--
+ALTER TABLE `users`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `username` (`username`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `filesystem`
+--
+ALTER TABLE `filesystem`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `themes`
+--
+ALTER TABLE `themes`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+
+--
+-- AUTO_INCREMENT for table `users`
+--
+ALTER TABLE `users`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
