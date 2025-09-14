@@ -93,6 +93,7 @@ The heart of your interactive story is the scripting engine. This guide explains
 
 - **ECHO \[text to display\]**: Displays text to the player.
 - **SET \[variable_name\] = \[value\]**: Creates or modifies a player variable.
+- **GET [VARIABLENAME] = [URL]**: Fetches data from a URL, sanitizes it to be alphanumeric, and stores it in a variable. For example: 'GET EXTERNAL_DATA = https://example.com/api/termivars/external_data'
 - **CALC \[variable_name\] = \[value1\] \[operator\] \[value2\]**: Performs a math operation (+, -, \*, /).
 - **WAIT \[milliseconds\]**: Pauses the script.
 - **IF \[condition\] / ELSE / ENDIF**: Controls the flow of your script.

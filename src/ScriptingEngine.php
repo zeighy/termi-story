@@ -50,6 +50,9 @@ class ScriptingEngine {
             case 'SET':
                 $this->handleSet($args);
                 break;
+            case 'GET':
+                $this->handleGet($args);
+                break;
             case 'CALC':
                 $this->handleCalc($args);
                 break;
@@ -71,6 +74,31 @@ class ScriptingEngine {
             $varName = trim($parts[0]);
             $value = $this->getValue(trim($parts[1]));
             $this->variables[$varName] = is_numeric($value) ? (float)$value : $value;
+        }
+    }
+
+    private function handleGet($args) {
+        $parts = explode('=', $args, 2);
+        if (count($parts) === 2) {
+            $varName = trim($parts[0]);
+            $url = $this->resolveVariables(trim($parts[1]));
+
+            if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                return;
+            }
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5); // 5 second timeout
+            $response = curl_exec($ch);
+            curl_close($ch);
+
+            if ($response !== false) {
+                $sanitizedResponse = preg_replace('/[^a-zA-Z0-9]/', '', $response);
+                $this->variables[$varName] = $sanitizedResponse;
+            }
         }
     }
 
