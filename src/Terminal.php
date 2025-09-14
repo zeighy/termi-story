@@ -202,7 +202,7 @@ class Terminal {
         $engine = new ScriptingEngine();
         $output = $engine->execute($file['content']);
         
-        return ['output' => $output];
+        return ['output' => htmlspecialchars_decode($output, ENT_QUOTES)];
     }
 
     public function getCurrentPath() {
