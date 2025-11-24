@@ -5,6 +5,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const promptLabel = document.getElementById('prompt-label');
     const passwordDots = document.getElementById('password-dots');
 
+    // Mobile Virtual Keyboard Handling
+    if (window.visualViewport) {
+        const handleViewportChange = () => {
+            // Adjust container height to match the visual viewport (visible area above keyboard)
+            terminalContainer.style.height = window.visualViewport.height + 'px';
+
+            // Scroll to the bottom to ensure input and latest output are visible
+            setTimeout(() => {
+                scrollToBottom();
+                terminalInput.scrollIntoView({ behavior: "smooth", block: "end" });
+            }, 100);
+        };
+
+        window.visualViewport.addEventListener('resize', handleViewportChange);
+        window.visualViewport.addEventListener('scroll', () => {
+            // Ensure we stick to the bottom if the viewport scrolls
+            setTimeout(scrollToBottom, 50);
+        });
+    }
+
     let terminalState = 'login-username';
     let tempUsername = '';
     const commandHistory = [];
@@ -20,9 +40,17 @@ document.addEventListener('DOMContentLoaded', () => {
         terminalInput.focus();
     });
 
-    terminalInput.addEventListener('input', () => {
+    terminalInput.addEventListener('input', async () => {
         autocompleteMatches = [];
         autocompleteIndex = 0;
+
+        // Triple comma detection for autocomplete
+        if (terminalInput.value.endsWith(',,,')) {
+            terminalInput.value = terminalInput.value.slice(0, -3);
+            await handleAutocomplete();
+            return;
+        }
+
         if (terminalState === 'login-password') {
             passwordDots.textContent = '*'.repeat(terminalInput.value.length);
         }
