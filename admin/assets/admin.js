@@ -135,6 +135,12 @@ $(function () {
             const parentNode = $('#fs-tree').jstree(true).get_node(node.parent);
             selectedDirName.textContent = parentNode ? parentNode.text : '/';
         }
+
+        // Reset the item type to Directory and trigger change to update UI
+        if (addItemForm && itemTypeSelect) {
+            itemTypeSelect.value = 'dir';
+            itemTypeSelect.dispatchEvent(new Event('change'));
+        }
     });
 
     if (addItemForm) {
@@ -152,6 +158,8 @@ $(function () {
             handleFormResponse(response, addFormResponse, () => {
                 $('#fs-tree').jstree(true).refresh();
                 addItemForm.reset();
+                // Ensure UI resets to default visibility state
+                itemTypeSelect.dispatchEvent(new Event('change'));
             });
         });
 
