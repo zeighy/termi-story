@@ -30,7 +30,7 @@ body {
 /* Mobile Scaling */
 @media (max-width: 600px) {
     body {
-        font-size: 14px; /* Smaller text on mobile */
+        font-size: 16px; /* Optimized for readability and preventing input zoom */
     }
 
     #terminal-container {

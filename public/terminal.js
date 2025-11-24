@@ -7,18 +7,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Mobile Virtual Keyboard Handling
     if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', () => {
-            // When the keyboard opens, the visual viewport shrinks.
-            // We scroll to the bottom to keep the input visible.
+        const handleViewportChange = () => {
+            // Adjust container height to match the visual viewport (visible area above keyboard)
+            terminalContainer.style.height = window.visualViewport.height + 'px';
+
+            // Scroll to the bottom to ensure input and latest output are visible
             setTimeout(() => {
                 scrollToBottom();
                 terminalInput.scrollIntoView({ behavior: "smooth", block: "end" });
             }, 100);
-        });
+        };
 
+        window.visualViewport.addEventListener('resize', handleViewportChange);
         window.visualViewport.addEventListener('scroll', () => {
-             // Keep input in view if viewport scrolls
-             setTimeout(scrollToBottom, 50);
+            // Ensure we stick to the bottom if the viewport scrolls
+            setTimeout(scrollToBottom, 50);
         });
     }
 
