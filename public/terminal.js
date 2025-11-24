@@ -5,6 +5,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const promptLabel = document.getElementById('prompt-label');
     const passwordDots = document.getElementById('password-dots');
 
+    // Mobile Virtual Keyboard Handling
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+            // When the keyboard opens, the visual viewport shrinks.
+            // We scroll to the bottom to keep the input visible.
+            setTimeout(() => {
+                scrollToBottom();
+                terminalInput.scrollIntoView({ behavior: "smooth", block: "end" });
+            }, 100);
+        });
+
+        window.visualViewport.addEventListener('scroll', () => {
+             // Keep input in view if viewport scrolls
+             setTimeout(scrollToBottom, 50);
+        });
+    }
+
     let terminalState = 'login-username';
     let tempUsername = '';
     const commandHistory = [];

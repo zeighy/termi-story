@@ -59,11 +59,19 @@ switch ($action) {
     case 'delete_user':
         $response = $admin->deleteUser($id);
         break;
-        
+    case 'get_users':
+        $users = $admin->getAllUsers();
+        echo json_encode(['success' => true, 'data' => $users]);
+        exit();
+
     // Theme Actions
     case 'update_theme':
         $response = $admin->updateThemeSettings($data);
         break;
+    case 'get_theme_settings':
+        $settings = $admin->getThemeSettings();
+        echo json_encode(['success' => true, 'data' => $settings]);
+        exit();
 
     default:
         $response['message'] = 'Invalid action specified.';

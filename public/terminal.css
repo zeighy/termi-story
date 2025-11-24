@@ -9,7 +9,7 @@ body {
 #terminal-container {
     padding: 10px;
     width: 100vw;
-    height: 100vh;
+    height: 100dvh; /* Use dynamic viewport height for mobile */
     box-sizing: border-box;
     display: flex;
     flex-direction: column; 
@@ -19,10 +19,23 @@ body {
     flex-grow: 1;
     overflow-y: auto;
     padding-right: 10px;
+    /* Ensure scroll is smooth */
+    scroll-behavior: smooth;
 }
 
 .motd {
     color: #888;
+}
+
+/* Mobile Scaling */
+@media (max-width: 600px) {
+    body {
+        font-size: 14px; /* Smaller text on mobile */
+    }
+
+    #terminal-container {
+        padding: 5px; /* Reduce padding on small screens */
+    }
 }
 
 .output-line {
