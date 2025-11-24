@@ -36,6 +36,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let isExecuting = false;
 
+    // Swipe detection for autocomplete
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    terminalInput.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    terminalInput.addEventListener('touchend', async (e) => {
+        const touchEndX = e.changedTouches[0].screenX;
+        const touchEndY = e.changedTouches[0].screenY;
+
+        const deltaX = touchEndX - touchStartX;
+        const deltaY = Math.abs(touchEndY - touchStartY);
+
+        // Check if swipe is rightward (> 50px) and mostly horizontal
+        if (deltaX > 50 && deltaY < 30) {
+            // Prevent default behavior if necessary, though touchend doesn't cancel effectively without touchstart prevention.
+            // But we just want to trigger the action.
+            await handleAutocomplete();
+        }
+    });
+
     terminalContainer.addEventListener('click', () => {
         terminalInput.focus();
     });
