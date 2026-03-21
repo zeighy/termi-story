@@ -142,7 +142,7 @@ body::after {
     cursor: text;
 }
 
-#input-mirror {
+#input-mirror, #input-mirror-after {
     white-space: pre;
     color: var(--text-color, #00ff00);
     font-family: inherit;
@@ -179,7 +179,11 @@ body::after {
     color: var(--text-color, #00ff00);
     font-family: inherit;
     font-size: inherit;
-    padding: inherit;
+    padding: 0; /* Changed from padding: inherit to prevent inheriting wrapper padding */
     line-height: inherit;
     text-shadow: inherit;
+    white-space: pre;
+    height: 100%;
+    display: flex;
+    align-items: center; /* Vertically center the dots */
 }

@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const promptLabel = document.getElementById('prompt-label');
     const passwordDots = document.getElementById('password-dots');
     const inputMirror = document.getElementById('input-mirror');
+    const inputMirrorAfter = document.getElementById('input-mirror-after');
 
     // Add boot sequence effect
     terminalContainer.classList.add('boot-sequence');
@@ -58,8 +59,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (terminalState === 'login-password') {
             passwordDots.textContent = '*'.repeat(terminalInput.value.length);
             inputMirror.textContent = ''; // Clear mirror so dots show
+            inputMirrorAfter.textContent = '';
         } else {
             inputMirror.textContent = terminalInput.value.substring(0, terminalInput.selectionStart);
+            inputMirrorAfter.textContent = terminalInput.value.substring(terminalInput.selectionStart);
         }
         updateCursorPosition();
     });
@@ -80,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cursorBlock.style.position = 'relative';
             cursorBlock.style.left = 'auto';
             inputMirror.textContent = terminalInput.value.substring(0, terminalInput.selectionStart);
+            inputMirrorAfter.textContent = terminalInput.value.substring(terminalInput.selectionStart);
         }
     }
 
@@ -101,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             terminalInput.value = '';
 
             inputMirror.textContent = ''; // Clear mirror on enter
+            inputMirrorAfter.textContent = '';
 
             if (terminalState === 'login-username') {
                 isExecuting = true;
@@ -155,6 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 historyIndex++;
                 terminalInput.value = commandHistory[historyIndex];
                 inputMirror.textContent = terminalInput.value;
+                inputMirrorAfter.textContent = '';
                 updateCursorPosition();
             }
         } else if (e.key === 'ArrowDown' && terminalState === 'active') {
@@ -163,11 +169,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 historyIndex--;
                 terminalInput.value = commandHistory[historyIndex];
                 inputMirror.textContent = terminalInput.value;
+                inputMirrorAfter.textContent = '';
                 updateCursorPosition();
             } else {
                 historyIndex = -1;
                 terminalInput.value = '';
                 inputMirror.textContent = '';
+                inputMirrorAfter.textContent = '';
                 updateCursorPosition();
             }
         }
@@ -195,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
             parts[parts.length - 1] = match;
             terminalInput.value = parts.join(' ');
             inputMirror.textContent = terminalInput.value;
+            inputMirrorAfter.textContent = '';
             updateCursorPosition();
             autocompleteIndex = (autocompleteIndex + 1) % autocompleteMatches.length;
         }

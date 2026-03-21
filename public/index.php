@@ -37,7 +37,7 @@ foreach ($themeResults as $row) {
             <span id="prompt-label">Username:</span>
             <div id="input-wrapper">
                 <span id="password-dots"></span>
-                <span id="input-mirror"></span><span class="cursor-block"></span>
+                <span id="input-mirror"></span><span class="cursor-block"></span><span id="input-mirror-after"></span>
                 <input type="text" id="terminal-input" autofocus autocomplete="new-password">
             </div>
         </div>
