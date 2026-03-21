@@ -1,18 +1,55 @@
+:root {
+    --scanline-color: rgba(255, 255, 255, 0.05);
+}
+
 body {
     background-color: var(--background-color, #1a1a1a);
     color: var(--text-color, #00ff00);
     font-family: 'Courier New', Courier, monospace;
     font-size: 16px;
+    line-height: 1.5; /* Increased for mobile readability */
     margin: 0;
+    text-shadow: 0 0 5px var(--text-color, #00ff00); /* Slight text glow */
+    overflow: hidden; /* Prevent body scroll, let terminal-container scroll */
+}
+
+body::after {
+    content: " ";
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(
+        to bottom,
+        var(--scanline-color) 50%,
+        transparent 50%
+    );
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 100; /* Scanlines overlay */
+}
+
+/* Subtle CRT flicker animation */
+@keyframes flicker {
+    0% { opacity: 0.98; }
+    5% { opacity: 0.95; }
+    10% { opacity: 0.98; }
+    15% { opacity: 1; }
+    100% { opacity: 1; }
 }
 
 #terminal-container {
-    padding: 10px;
+    padding: 15px; /* Increased padding */
     width: 100vw;
     height: 100dvh; /* Use dynamic viewport height for mobile */
     box-sizing: border-box;
     display: flex;
     flex-direction: column; 
+    animation: flicker 0.15s infinite;
+    position: relative;
+    z-index: 1;
 }
 
 #terminal-output {
@@ -21,10 +58,27 @@ body {
     padding-right: 10px;
     /* Ensure scroll is smooth */
     scroll-behavior: smooth;
+    /* Hide scrollbar for a cleaner look */
+    scrollbar-width: none;
+}
+#terminal-output::-webkit-scrollbar {
+    display: none;
 }
 
 .motd {
     color: #888;
+    text-shadow: none; /* Reduce glow on motd */
+}
+
+/* Boot up sequence fade-in */
+.boot-sequence {
+    animation: bootUp 1.5s ease-out forwards;
+}
+
+@keyframes bootUp {
+    0% { opacity: 0; filter: blur(10px); }
+    50% { filter: blur(2px); }
+    100% { opacity: 1; filter: blur(0); }
 }
 
 /* Mobile Scaling */
@@ -34,17 +88,19 @@ body {
     }
 
     #terminal-container {
-        padding: 5px; /* Reduce padding on small screens */
+        padding: 10px; /* Adjusted for mobile */
     }
 }
 
 .output-line {
     white-space: pre-wrap;
     word-wrap: break-word;
+    margin-bottom: 2px;
 }
 
 .command-line {
     display: flex;
+    margin-bottom: 2px;
 }
 
 .prompt-path-display, .prompt {
@@ -54,20 +110,61 @@ body {
 
 #terminal-input-line {
     display: flex;
-    padding-top: 5px;
+    padding-top: 10px; /* increased tap target */
+    padding-bottom: 10px;
     position: relative; 
+    align-items: center; /* keep prompt and input aligned */
+}
+
+#input-wrapper {
+    position: relative;
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
 }
 
 #terminal-input {
-    flex-grow: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0; /* Hide input but keep it functional */
+    color: transparent;
     background-color: transparent;
     border: none;
+    outline: none;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0;
+    line-height: inherit;
+    z-index: 2;
+    cursor: text;
+}
+
+#input-mirror {
+    white-space: pre;
     color: var(--text-color, #00ff00);
     font-family: inherit;
     font-size: inherit;
-    outline: none;
-    padding: 0; /* Align with password-dots */
-    line-height: inherit; /* Align with password-dots */
+    line-height: inherit;
+    text-shadow: inherit;
+}
+
+.cursor-block {
+    display: inline-block;
+    width: 0.6em;
+    height: 1.2em;
+    background-color: var(--text-color, #00ff00);
+    animation: blink 1s step-end infinite;
+    vertical-align: text-bottom;
+    margin-left: 1px;
+    box-shadow: 0 0 5px var(--text-color, #00ff00);
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
 }
 
 #terminal-input.password-mask {
@@ -84,4 +181,5 @@ body {
     font-size: inherit;
     padding: inherit;
     line-height: inherit;
+    text-shadow: inherit;
 }

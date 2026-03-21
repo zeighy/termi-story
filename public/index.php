@@ -35,8 +35,11 @@ foreach ($themeResults as $row) {
         </div>
         <div id="terminal-input-line">
             <span id="prompt-label">Username:</span>
-            <span id="password-dots"></span>
-            <input type="text" id="terminal-input" autofocus autocomplete="new-password">
+            <div id="input-wrapper">
+                <span id="password-dots"></span>
+                <span id="input-mirror"></span><span class="cursor-block"></span>
+                <input type="text" id="terminal-input" autofocus autocomplete="new-password">
+            </div>
         </div>
     </div>
     <script>
