@@ -9,6 +9,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const terminalInputLine = document.getElementById('terminal-input-line');
 
+    let terminalState = 'login-username';
+    let tempUsername = '';
+    const commandHistory = [];
+    let historyIndex = -1;
+
+    let autocompleteMatches = [];
+    let autocompleteIndex = 0;
+    let lastPartial = '';
+
+    let isExecuting = false;
+
     // Add boot sequence effect
     terminalContainer.classList.add('boot-sequence');
 
@@ -117,17 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(scrollToBottom, 50);
         });
     }
-
-    let terminalState = 'login-username';
-    let tempUsername = '';
-    const commandHistory = [];
-    let historyIndex = -1;
-
-    let autocompleteMatches = [];
-    let autocompleteIndex = 0;
-    let lastPartial = '';
-
-    let isExecuting = false;
 
     terminalContainer.addEventListener('click', () => {
         terminalInput.focus();
