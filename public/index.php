@@ -31,9 +31,8 @@ foreach ($themeResults as $row) {
 <body>
     <div id="terminal-container">
         <div id="terminal-output">
-             <div class="motd"><?php echo htmlspecialchars($theme['login_greeting'] ?? 'Welcome.'); ?></div>
         </div>
-        <div id="terminal-input-line">
+        <div id="terminal-input-line" style="display: none;">
             <span id="prompt-label">Username:</span>
             <div id="input-wrapper">
                 <span id="password-dots"></span>
@@ -45,6 +44,7 @@ foreach ($themeResults as $row) {
     <script>
         // Pass the MOTD to JavaScript
         const motd = `<?php echo addslashes($theme['motd'] ?? ''); ?>`;
+        const loginGreeting = `<?php echo addslashes($theme['login_greeting'] ?? 'Welcome.'); ?>`;
     </script>
     <script src="terminal.js"></script>
 </body>

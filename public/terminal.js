@@ -7,8 +7,96 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputMirror = document.getElementById('input-mirror');
     const inputMirrorAfter = document.getElementById('input-mirror-after');
 
+    const terminalInputLine = document.getElementById('terminal-input-line');
+
     // Add boot sequence effect
     terminalContainer.classList.add('boot-sequence');
+
+    // Run text-based boot animation
+    async function runBootSequence() {
+        isExecuting = true;
+
+        // Use a simple timeout to wait for the CSS fade-in to start
+        await new Promise(r => setTimeout(r, 500));
+
+        const bootText = "Establishing connection to terminal...\n%%WAIT:500\nAuthenticating connection...\n%%WAIT:800\nConnection secure.\n%%WAIT:300\nInitializing system...\n%%WAIT:600\nDone.\n%%WAIT:200\n";
+
+        await typewriterEffect(bootText);
+
+        const motdDiv = document.createElement('div');
+        motdDiv.className = 'motd';
+        motdDiv.innerHTML = escapeHtml(loginGreeting).replace(/\n/g, '<br>');
+        terminalOutput.appendChild(motdDiv);
+
+        terminalInputLine.style.display = 'flex';
+        terminalInput.focus();
+        isExecuting = false;
+        scrollToBottom();
+    }
+
+    // Hoist functions so they can be called before declaration
+    function typewriterEffect(text) {
+        return new Promise(resolve => {
+            const lines = text.split('\n');
+            const outputLine = document.createElement('div');
+            outputLine.classList.add('output-line');
+            terminalOutput.appendChild(outputLine);
+
+            let lineIndex = 0;
+
+            async function processNextLine() {
+                if (lineIndex >= lines.length) {
+                    resolve();
+                    return;
+                }
+
+                const line = lines[lineIndex];
+                lineIndex++;
+
+                if (line.startsWith('%%WAIT:')) {
+                    const ms = parseInt(line.split(':')[1] || '1000');
+                    await new Promise(r => setTimeout(r, ms));
+                    await processNextLine();
+                } else {
+                    await typeLine(outputLine, line);
+                    await processNextLine();
+                }
+            }
+            processNextLine();
+        });
+    }
+
+    function typeLine(element, text) {
+        return new Promise(resolve => {
+            let i = 0;
+            function type() {
+                if (i < text.length) {
+                    let char = text.charAt(i);
+                    element.innerHTML += escapeHtml(char);
+                    i++;
+                    scrollToBottom();
+                    setTimeout(type, 25);
+                } else {
+                    element.innerHTML += '<br>';
+                    resolve();
+                }
+            }
+            type();
+        });
+    }
+
+    function scrollToBottom() {
+        terminalOutput.scrollTop = terminalOutput.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.innerText = text;
+        return div.innerHTML;
+    }
+
+    // Start it
+    runBootSequence();
 
     // Mobile Virtual Keyboard Handling
     if (window.visualViewport) {
@@ -293,56 +381,6 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
     }
     
-    function typewriterEffect(text) {
-        return new Promise(resolve => {
-            const lines = text.split('\n');
-            const outputLine = document.createElement('div');
-            outputLine.classList.add('output-line');
-            terminalOutput.appendChild(outputLine);
-
-            let lineIndex = 0;
-
-            async function processNextLine() {
-                if (lineIndex >= lines.length) {
-                    resolve();
-                    return;
-                }
-
-                const line = lines[lineIndex];
-                lineIndex++;
-
-                if (line.startsWith('%%WAIT:')) {
-                    const ms = parseInt(line.split(':')[1] || '1000');
-                    await new Promise(r => setTimeout(r, ms));
-                    await processNextLine();
-                } else {
-                    await typeLine(outputLine, line);
-                    await processNextLine();
-                }
-            }
-            processNextLine();
-        });
-    }
-
-    function typeLine(element, text) {
-        return new Promise(resolve => {
-            let i = 0;
-            function type() {
-                if (i < text.length) {
-                    let char = text.charAt(i);
-                    element.innerHTML += escapeHtml(char);
-                    i++;
-                    scrollToBottom();
-                    setTimeout(type, 25);
-                } else {
-                    element.innerHTML += '<br>';
-                    resolve();
-                }
-            }
-            type();
-        });
-    }
-
     function typewriterChunkEffect(text) {
         return new Promise(resolve => {
             const outputLine = document.createElement('div');
@@ -365,15 +403,5 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             typeChunk();
         });
-    }
-
-    function scrollToBottom() {
-        terminalOutput.scrollTop = terminalOutput.scrollHeight;
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.innerText = text;
-        return div.innerHTML;
     }
 });
