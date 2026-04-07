@@ -4,6 +4,110 @@ document.addEventListener('DOMContentLoaded', () => {
     const terminalInput = document.getElementById('terminal-input');
     const promptLabel = document.getElementById('prompt-label');
     const passwordDots = document.getElementById('password-dots');
+    const inputMirror = document.getElementById('input-mirror');
+    const inputMirrorAfter = document.getElementById('input-mirror-after');
+
+    const terminalInputLine = document.getElementById('terminal-input-line');
+
+    let terminalState = 'login-username';
+    let tempUsername = '';
+    const commandHistory = [];
+    let historyIndex = -1;
+
+    let autocompleteMatches = [];
+    let autocompleteIndex = 0;
+    let lastPartial = '';
+
+    let isExecuting = false;
+
+    // Add boot sequence effect
+    terminalContainer.classList.add('boot-sequence');
+
+    // Run text-based boot animation
+    async function runBootSequence() {
+        isExecuting = true;
+
+        // Use a simple timeout to wait for the CSS fade-in to start
+        await new Promise(r => setTimeout(r, 500));
+
+        const bootText = "Establishing connection to terminal...\n%%WAIT:500\nAuthenticating connection...\n%%WAIT:800\nConnection secure.\n%%WAIT:300\nInitializing system...\n%%WAIT:600\nDone.\n%%WAIT:200\n";
+
+        await typewriterEffect(bootText);
+
+        const motdDiv = document.createElement('div');
+        motdDiv.className = 'motd';
+        motdDiv.innerHTML = escapeHtml(loginGreeting).replace(/\n/g, '<br>');
+        terminalOutput.appendChild(motdDiv);
+
+        terminalInputLine.style.display = 'flex';
+        terminalInput.focus();
+        isExecuting = false;
+        scrollToBottom();
+    }
+
+    // Hoist functions so they can be called before declaration
+    function typewriterEffect(text) {
+        return new Promise(resolve => {
+            const lines = text.split('\n');
+            const outputLine = document.createElement('div');
+            outputLine.classList.add('output-line');
+            terminalOutput.appendChild(outputLine);
+
+            let lineIndex = 0;
+
+            async function processNextLine() {
+                if (lineIndex >= lines.length) {
+                    resolve();
+                    return;
+                }
+
+                const line = lines[lineIndex];
+                lineIndex++;
+
+                if (line.startsWith('%%WAIT:')) {
+                    const ms = parseInt(line.split(':')[1] || '1000');
+                    await new Promise(r => setTimeout(r, ms));
+                    await processNextLine();
+                } else {
+                    await typeLine(outputLine, line);
+                    await processNextLine();
+                }
+            }
+            processNextLine();
+        });
+    }
+
+    function typeLine(element, text) {
+        return new Promise(resolve => {
+            let i = 0;
+            function type() {
+                if (i < text.length) {
+                    let char = text.charAt(i);
+                    element.innerHTML += escapeHtml(char);
+                    i++;
+                    scrollToBottom();
+                    setTimeout(type, 25);
+                } else {
+                    element.innerHTML += '<br>';
+                    resolve();
+                }
+            }
+            type();
+        });
+    }
+
+    function scrollToBottom() {
+        terminalOutput.scrollTop = terminalOutput.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.innerText = text;
+        return div.innerHTML;
+    }
+
+    // Start it
+    runBootSequence();
 
     // Mobile Virtual Keyboard Handling
     if (window.visualViewport) {
@@ -25,17 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    let terminalState = 'login-username';
-    let tempUsername = '';
-    const commandHistory = [];
-    let historyIndex = -1;
-
-    let autocompleteMatches = [];
-    let autocompleteIndex = 0;
-    let lastPartial = '';
-
-    let isExecuting = false;
-
     terminalContainer.addEventListener('click', () => {
         terminalInput.focus();
     });
@@ -53,8 +146,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (terminalState === 'login-password') {
             passwordDots.textContent = '*'.repeat(terminalInput.value.length);
+            inputMirror.textContent = ''; // Clear mirror so dots show
+            inputMirrorAfter.textContent = '';
+        } else {
+            inputMirror.textContent = terminalInput.value.substring(0, terminalInput.selectionStart);
+            inputMirrorAfter.textContent = terminalInput.value.substring(terminalInput.selectionStart);
         }
+        updateCursorPosition();
     });
+
+    // Handle cursor movement via click or keyboard
+    terminalInput.addEventListener('keyup', updateCursorPosition);
+    terminalInput.addEventListener('click', updateCursorPosition);
+
+    function updateCursorPosition() {
+        if (terminalState === 'login-password') {
+            const cursorBlock = document.querySelector('.cursor-block');
+            cursorBlock.style.marginLeft = (passwordDots.offsetWidth + 1) + 'px';
+            cursorBlock.style.position = 'absolute';
+            cursorBlock.style.left = '0';
+        } else {
+            const cursorBlock = document.querySelector('.cursor-block');
+            cursorBlock.style.marginLeft = '1px';
+            cursorBlock.style.position = 'relative';
+            cursorBlock.style.left = 'auto';
+            inputMirror.textContent = terminalInput.value.substring(0, terminalInput.selectionStart);
+            inputMirrorAfter.textContent = terminalInput.value.substring(terminalInput.selectionStart);
+        }
+    }
 
     terminalInput.addEventListener('keydown', async (e) => {
         if (isExecuting) {
@@ -73,13 +192,16 @@ document.addEventListener('DOMContentLoaded', () => {
             
             terminalInput.value = '';
 
+            inputMirror.textContent = ''; // Clear mirror on enter
+            inputMirrorAfter.textContent = '';
+
             if (terminalState === 'login-username') {
                 isExecuting = true;
                 tempUsername = command;
                 displayLine(`Username: ${tempUsername}`);
                 promptLabel.textContent = 'Password:';
                 terminalInput.classList.add('password-mask');
-                passwordDots.style.left = promptLabel.offsetWidth + 'px';
+                passwordDots.style.left = '0px'; // now inside wrapper, so 0
                 terminalState = 'login-password';
                 isExecuting = false;
 
@@ -125,15 +247,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (historyIndex < commandHistory.length - 1) {
                 historyIndex++;
                 terminalInput.value = commandHistory[historyIndex];
+                inputMirror.textContent = terminalInput.value;
+                inputMirrorAfter.textContent = '';
+                updateCursorPosition();
             }
         } else if (e.key === 'ArrowDown' && terminalState === 'active') {
             e.preventDefault();
             if (historyIndex > 0) {
                 historyIndex--;
                 terminalInput.value = commandHistory[historyIndex];
+                inputMirror.textContent = terminalInput.value;
+                inputMirrorAfter.textContent = '';
+                updateCursorPosition();
             } else {
                 historyIndex = -1;
                 terminalInput.value = '';
+                inputMirror.textContent = '';
+                inputMirrorAfter.textContent = '';
+                updateCursorPosition();
             }
         }
     });
@@ -159,6 +290,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const match = autocompleteMatches[autocompleteIndex];
             parts[parts.length - 1] = match;
             terminalInput.value = parts.join(' ');
+            inputMirror.textContent = terminalInput.value;
+            inputMirrorAfter.textContent = '';
+            updateCursorPosition();
             autocompleteIndex = (autocompleteIndex + 1) % autocompleteMatches.length;
         }
     }
@@ -247,56 +381,6 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
     }
     
-    function typewriterEffect(text) {
-        return new Promise(resolve => {
-            const lines = text.split('\n');
-            const outputLine = document.createElement('div');
-            outputLine.classList.add('output-line');
-            terminalOutput.appendChild(outputLine);
-
-            let lineIndex = 0;
-
-            async function processNextLine() {
-                if (lineIndex >= lines.length) {
-                    resolve();
-                    return;
-                }
-
-                const line = lines[lineIndex];
-                lineIndex++;
-
-                if (line.startsWith('%%WAIT:')) {
-                    const ms = parseInt(line.split(':')[1] || '1000');
-                    await new Promise(r => setTimeout(r, ms));
-                    await processNextLine();
-                } else {
-                    await typeLine(outputLine, line);
-                    await processNextLine();
-                }
-            }
-            processNextLine();
-        });
-    }
-
-    function typeLine(element, text) {
-        return new Promise(resolve => {
-            let i = 0;
-            function type() {
-                if (i < text.length) {
-                    let char = text.charAt(i);
-                    element.innerHTML += escapeHtml(char);
-                    i++;
-                    scrollToBottom();
-                    setTimeout(type, 25);
-                } else {
-                    element.innerHTML += '<br>';
-                    resolve();
-                }
-            }
-            type();
-        });
-    }
-
     function typewriterChunkEffect(text) {
         return new Promise(resolve => {
             const outputLine = document.createElement('div');
@@ -319,15 +403,5 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             typeChunk();
         });
-    }
-
-    function scrollToBottom() {
-        terminalOutput.scrollTop = terminalOutput.scrollHeight;
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.innerText = text;
-        return div.innerHTML;
     }
 });
