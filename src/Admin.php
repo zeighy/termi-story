@@ -44,6 +44,8 @@ class Admin {
             $name .= '.txt';
         } elseif ($type === 'app' && substr($name, -4) !== '.app') {
             $name .= '.app';
+        } elseif ($type === 'img' && substr($name, -4) !== '.img') {
+            $name .= '.img';
         }
         
         $password = !empty($data['password']) ? password_hash($data['password'], PASSWORD_ARGON2ID) : null;
@@ -55,7 +57,12 @@ class Admin {
         $this->db->bind(':parent_id', $data['parent_id']);
         $this->db->bind(':name', $name);
         $this->db->bind(':type', $data['type']);
-        $this->db->bind(':content', ($data['type'] !== 'dir') ? htmlspecialchars($data['content'] ?? '', ENT_QUOTES, 'UTF-8') : null);
+        if ($data['type'] === 'img') {
+            $content = ($data['image_width'] ?? '') . ';' . ($data['image_content'] ?? '');
+        } else {
+            $content = ($data['type'] !== 'dir') ? htmlspecialchars($data['content'] ?? '', ENT_QUOTES, 'UTF-8') : null;
+        }
+        $this->db->bind(':content', $content);
         $this->db->bind(':password', $password);
         $this->db->bind(':password_hint', !empty($data['password_hint']) ? $data['password_hint'] : null);
         $this->db->bind(':is_hidden', isset($data['is_hidden']) ? 1 : 0);
@@ -88,6 +95,8 @@ class Admin {
             $name .= '.txt';
         } elseif ($item['type'] === 'app' && substr($name, -4) !== '.app') {
             $name .= '.app';
+        } elseif ($item['type'] === 'img' && substr($name, -4) !== '.img') {
+            $name .= '.img';
         }
         
         $password = $item['password'];
@@ -106,7 +115,16 @@ class Admin {
         $this->db->query($sql);
         $this->db->bind(':id', $data['id']);
         $this->db->bind(':name', $name);
-        $this->db->bind(':content', ($item['type'] !== 'dir') ? htmlspecialchars($data['content'] ?? '', ENT_QUOTES, 'UTF-8') : null);
+        if ($item['type'] === 'img') {
+            if (!empty($data['edit_image_content'])) {
+                $content = ($data['edit_image_width'] ?? '') . ';' . ($data['edit_image_content'] ?? '');
+            } else {
+                $content = $item['content'];
+            }
+        } else {
+            $content = ($item['type'] !== 'dir') ? htmlspecialchars($data['content'] ?? '', ENT_QUOTES, 'UTF-8') : null;
+        }
+        $this->db->bind(':content', $content);
         $this->db->bind(':password', $password);
         $this->db->bind(':password_hint', !empty($data['password_hint']) ? $data['password_hint'] : null);
         $this->db->bind(':is_hidden', isset($data['is_hidden']) && $data['is_hidden'] ? 1 : 0);

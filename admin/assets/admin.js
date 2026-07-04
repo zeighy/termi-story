@@ -95,7 +95,7 @@ $(function () {
         'types': {
             'dir': { 'icon': 'jstree-folder' },
             'txt': { 'icon': 'jstree-file' },
-            'app': { 'icon': 'jstree-file' }
+            'app': { 'icon': 'jstree-file' }, 'img': { 'icon': 'jstree-file' }
         },
         'contextmenu': {
             'items': function (node) {
@@ -146,7 +146,8 @@ $(function () {
     if (addItemForm) {
         itemTypeSelect.addEventListener('change', function () {
             const type = this.value;
-            addContentWrapper.style.display = (type === 'dir') ? 'none' : 'block';
+            addContentWrapper.style.display = (type === 'txt' || type === 'app') ? 'block' : 'none';
+            document.getElementById('image-upload-wrapper').style.display = (type === 'img') ? 'block' : 'none';
             addPasswordWrapper.style.display = (type === 'txt') ? 'block' : 'none';
         });
 
@@ -158,6 +159,8 @@ $(function () {
             handleFormResponse(response, addFormResponse, () => {
                 $('#fs-tree').jstree(true).refresh();
                 addItemForm.reset();
+                const addPreview = document.getElementById('image-preview');
+                if (addPreview) addPreview.style.display = 'none';
                 // Ensure UI resets to default visibility state
                 itemTypeSelect.dispatchEvent(new Event('change'));
             });
@@ -177,7 +180,8 @@ $(function () {
         document.getElementById('edit-item-name').value = item.name;
 
         const isDir = item.type === 'dir';
-        document.getElementById('edit-content-wrapper').style.display = isDir ? 'none' : 'block';
+        document.getElementById('edit-content-wrapper').style.display = (item.type === 'txt' || item.type === 'app') ? 'block' : 'none';
+        document.getElementById('edit-image-upload-wrapper').style.display = (item.type === 'img') ? 'block' : 'none';
         document.getElementById('edit-password-wrapper').style.display = item.type === 'txt' ? 'block' : 'none';
 
         if (!isDir) {
@@ -192,6 +196,8 @@ $(function () {
         modal.style.display = 'none';
         editForm.reset();
         editFormResponse.textContent = '';
+        const editPreview = document.getElementById('edit-image-preview');
+        if (editPreview) editPreview.style.display = 'none';
     }
 
     cancelEditBtn.addEventListener('click', closeEditModal);
@@ -335,3 +341,98 @@ $(function () {
         return div.innerHTML;
     }
 });
+    // --- Image Processing ---
+    function processImageFile(file, previewCanvasId, stringInputId, widthInputId) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const MAX_SIZE = 600;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_SIZE) {
+                        height *= MAX_SIZE / width;
+                        width = MAX_SIZE;
+                    }
+                } else {
+                    if (height > MAX_SIZE) {
+                        width *= MAX_SIZE / height;
+                        height = MAX_SIZE;
+                    }
+                }
+
+                width = Math.floor(width);
+                height = Math.floor(height);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const data = imageData.data;
+
+                const bayerMatrix = [
+                    [ 0,  8,  2, 10],
+                    [12,  4, 14,  6],
+                    [ 3, 11,  1,  9],
+                    [15,  7, 13,  5]
+                ];
+
+                let binaryString = '';
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const index = (y * width + x) * 4;
+                        const r = data[index];
+                        const g = data[index + 1];
+                        const b = data[index + 2];
+                        const grayscale = 0.299 * r + 0.587 * g + 0.114 * b;
+
+                        const normalizedValue = grayscale / 255.0;
+                        const threshold = (bayerMatrix[y % 4][x % 4] + 0.5) / 16.0;
+
+                        const isWhite = normalizedValue > threshold;
+                        binaryString += isWhite ? '1' : '0';
+
+                        const color = isWhite ? 255 : 0;
+                        data[index] = color;
+                        data[index+1] = color;
+                        data[index+2] = color;
+                        data[index+3] = 255;
+                    }
+                }
+
+                ctx.putImageData(imageData, 0, 0);
+
+                const previewCanvas = document.getElementById(previewCanvasId);
+                previewCanvas.style.display = 'block';
+                previewCanvas.width = width;
+                previewCanvas.height = height;
+                const previewCtx = previewCanvas.getContext('2d');
+                previewCtx.drawImage(canvas, 0, 0);
+
+                document.getElementById(stringInputId).value = binaryString;
+                document.getElementById(widthInputId).value = width;
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    const itemImageInput = document.getElementById('item-image');
+    if (itemImageInput) {
+        itemImageInput.addEventListener('change', function() {
+            processImageFile(this.files[0], 'image-preview', 'item-image-string', 'item-image-width');
+        });
+    }
+
+    const editItemImageInput = document.getElementById('edit-item-image');
+    if (editItemImageInput) {
+        editItemImageInput.addEventListener('change', function() {
+            processImageFile(this.files[0], 'edit-image-preview', 'edit-item-image-string', 'edit-item-image-width');
+        });
+    }

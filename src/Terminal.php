@@ -33,10 +33,12 @@ class Terminal {
                 return $this->_commandUnlock($args);
             case 'run':
                 return $this->_commandRun($args);
+            case 'view':
+                return $this->_commandView($args);
             case 'reset':
                 return $this->_commandReset();
             case 'help':
-                return ['output' => "Available commands:\n  ls       - List files\n  cd       - Change directory\n  cat      - Read file\n  run      - Execute a script file\n  unlock   - Unlock a protected file\n  reset    - Reset your game progress\n  clear    - Clear screen"];
+                return ['output' => "Available commands:\n  ls       - List files\n  cd       - Change directory\n  cat      - Read file\n  view     - View an image file\n  run      - Execute a script file\n  unlock   - Unlock a protected file\n  reset    - Reset your game progress\n  clear    - Clear screen"];
             default:
                 return ['output' => "invalid command"];
         }
@@ -95,6 +97,18 @@ class Terminal {
 
         if ($file['type'] === 'app') {
             return ['output' => "Cannot display content of an executable file. Use 'run {$filename}' instead."];
+        }
+
+        if ($file['type'] === 'img') {
+            if (!empty($file['password']) && !in_array($file['id'], $_SESSION['unlocked_files'])) {
+                $hint = htmlspecialchars($file['password_hint']);
+                return ['output' => "Access Denied. File is locked.\nHint: {$hint}\nUse: unlock {$filename} [password]"];
+            }
+            $content = explode(';', $file['content'], 2);
+            if (count($content) === 2) {
+                return ['output' => $content[1]];
+            }
+            return ['output' => $file['content']];
         }
 
         if (!empty($file['password']) && !in_array($file['id'], $_SESSION['unlocked_files'])) {
@@ -203,6 +217,33 @@ class Terminal {
         $output = $engine->execute($file['content']);
         
         return ['output' => htmlspecialchars_decode($output, ENT_QUOTES)];
+    }
+
+    private function _commandView($args) {
+        if (empty($args)) {
+            return ['output' => 'usage: view [filename.img]'];
+        }
+        $filename = $args[0];
+
+        $this->db->query("SELECT id, content, type, password, password_hint FROM filesystem WHERE parent_id = :currentDirId AND name = :name");
+        $this->db->bind(':currentDirId', $this->currentDirId);
+        $this->db->bind(':name', $filename);
+        $file = $this->db->single();
+
+        if (!$file) {
+            return ['output' => "view: {$filename}: No such file"];
+        }
+
+        if ($file['type'] !== 'img') {
+            return ['output' => "Image file render error. Likely invalid image file."];
+        }
+
+        if (!empty($file['password']) && !in_array($file['id'], $_SESSION['unlocked_files'])) {
+            $hint = htmlspecialchars($file['password_hint']);
+            return ['output' => "Access Denied. File is locked.\nHint: {$hint}\nUse: unlock {$filename} [password]"];
+        }
+
+        return ['output' => $file['content'], 'animation' => 'imageRender'];
     }
 
     public function getCurrentPath() {

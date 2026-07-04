@@ -4,7 +4,7 @@ session_start();
 // --- Configuration ---
 const ADMIN_USERNAME = 'storymanager';
 // Replace this with the hash you generated from the command line from hash_password.php
-const ADMIN_PASSWORD_HASH = '$argon2id$v=19$m=65536,t=4,p=1$dTNaMG9BOGdScjRoak9BQw$JsAf5zpArEZc0KtbUK/o5N+u+YUD6cUeue92rdwwb+k';
+const ADMIN_PASSWORD_HASH = '$argon2id$v=19$m=65536,t=4,p=1$cFZOMXNKL0sxY1NUbnA5dw$izCEnEsvk4Tr4SqhMMNY6Z9KqRhUrY1JoO6R/L6nnWA';
 
 // --- Authentication Logic ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
