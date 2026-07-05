@@ -11,7 +11,7 @@ CREATE TABLE `filesystem` (
   `parent_id` int(11) DEFAULT NULL,
   `name` varchar(100) NOT NULL,
   `type` enum('dir','txt','app','img') NOT NULL,
-  `content` text DEFAULT NULL,
+  `content` LONGTEXT DEFAULT NULL,
   `is_hidden` tinyint(1) DEFAULT 0,
   `password` varchar(255) DEFAULT NULL,
   `password_hint` varchar(255) DEFAULT NULL,
