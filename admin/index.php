@@ -71,11 +71,19 @@ if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !
                         <option value="dir">Directory</option>
                         <option value="txt">Text File (.txt)</option>
                         <option value="app">App File (.app)</option>
+                        <option value="img">Image File (.img)</option>
                     </select>
 
                     <label for="item-name">Name:</label>
                     <input type="text" id="item-name" name="name" required>
 
+                    <div id="image-upload-wrapper" style="display: none; margin-bottom: 10px;">
+                        <label for="item-image">Upload Image:</label>
+                        <input type="file" id="item-image" accept="image/*">
+                        <canvas id="image-preview" style="max-width: 100%; margin-top: 10px; border: 1px solid #ccc; background-color: #000; display: none;"></canvas>
+                        <input type="hidden" id="item-image-string" name="image_content">
+                        <input type="hidden" id="item-image-width" name="image_width">
+                    </div>
                     <div id="content-wrapper" style="display: none;">
                         <label for="item-content">Content:</label>
                         <textarea id="item-content" name="content" rows="8"></textarea>
@@ -187,6 +195,13 @@ if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !
                 <label for="edit-item-name">Name:</label>
                 <input type="text" id="edit-item-name" name="name" required>
 
+                <div id="edit-image-upload-wrapper" style="display: none; margin-bottom: 10px;">
+                    <label for="edit-item-image">Upload Image:</label>
+                    <input type="file" id="edit-item-image" accept="image/*">
+                    <canvas id="edit-image-preview" style="max-width: 100%; margin-top: 10px; border: 1px solid #ccc; background-color: #000; display: none;"></canvas>
+                    <input type="hidden" id="edit-item-image-string" name="edit_image_content">
+                    <input type="hidden" id="edit-item-image-width" name="edit_image_width">
+                </div>
                 <div id="edit-content-wrapper">
                     <label for="edit-item-content">Content:</label>
                     <textarea id="edit-item-content" name="content" rows="8"></textarea>

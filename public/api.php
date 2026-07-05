@@ -43,7 +43,7 @@ if ($action === 'login') {
 
 } elseif ($action === 'autocomplete' && isset($_SESSION['user_id'])) {
     $partial = $data['partial'] ?? '';
-    $commands = ['ls', 'cat', 'cd', 'run', 'unlock', 'reset', 'help', 'clear', 'logout'];
+    $commands = ['ls', 'cat', 'cd', 'run', 'unlock', 'reset', 'help', 'view', 'clear', 'logout'];
     $matches = [];
 
     if (strpos($data['full_line'], ' ') === false) {

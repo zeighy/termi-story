@@ -366,6 +366,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 await typewriterEffect(data.output);
             } else if (data.animation === 'typewriterChunk') {
                 await typewriterChunkEffect(data.output);
+            } else if (data.animation === 'imageRender') {
+                await renderImageProgressive(data.output);
             } else {
                 displayOutput(data.output);
             }
@@ -404,4 +406,69 @@ document.addEventListener('DOMContentLoaded', () => {
             typeChunk();
         });
     }
+    function renderImageProgressive(dataString) {
+        return new Promise(resolve => {
+            const parts = dataString.split(';');
+            if (parts.length < 2) {
+                displayOutput("Error parsing image data.");
+                resolve();
+                return;
+            }
+
+            const width = parseInt(parts[0], 10);
+            const pixelData = parts[1];
+
+            if (isNaN(width) || width <= 0) {
+                displayOutput("Invalid image dimensions.");
+                resolve();
+                return;
+            }
+
+            const height = Math.ceil(pixelData.length / width);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.maxWidth = '100%';
+            canvas.style.display = 'block';
+            canvas.style.marginBottom = '10px';
+            terminalOutput.appendChild(canvas);
+
+            const ctx = canvas.getContext('2d');
+
+            const bodyStyle = getComputedStyle(document.body);
+            const bgColor = bodyStyle.getPropertyValue('--background-color').trim() || '#1a1a1a';
+            const textColor = bodyStyle.getPropertyValue('--text-color').trim() || '#00ff00';
+
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, width, height);
+
+            let y = 0;
+            const rowsPerSecond = 30;
+            const msPerRow = 1000 / rowsPerSecond;
+
+            function renderRow() {
+                if (y < height) {
+                    for (let x = 0; x < width; x++) {
+                        const idx = y * width + x;
+                        if (idx < pixelData.length) {
+                            const pixel = pixelData[idx];
+                            if (pixel === '1') {
+                                ctx.fillStyle = textColor;
+                                ctx.fillRect(x, y, 1, 1);
+                            }
+                        }
+                    }
+                    y++;
+                    scrollToBottom();
+                    setTimeout(renderRow, msPerRow);
+                } else {
+                    resolve();
+                }
+            }
+
+            renderRow();
+        });
+    }
+
 });
