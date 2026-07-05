@@ -188,6 +188,7 @@ $(function () {
             document.getElementById('edit-item-content').value = item.content || '';
         }
         document.getElementById('edit-is-hidden').checked = item.is_hidden == 1;
+        document.getElementById('edit-item-owner').value = item.owner_id ? item.owner_id : 'null';
 
         modal.style.display = 'flex';
     }
@@ -228,6 +229,26 @@ $(function () {
     // ============================
     // USER MANAGEMENT LOGIC
     // ============================
+
+    async function loadUserDropdowns() {
+        const result = await apiRequest('get_users');
+        if (result.success) {
+            const addOwnerSelect = document.getElementById('item-owner');
+            const editOwnerSelect = document.getElementById('edit-item-owner');
+
+            let optionsHtml = '<option value="null">All Users</option>';
+            result.data.forEach(user => {
+                optionsHtml += `<option value="${user.id}">${escapeHtml(user.username)}</option>`;
+            });
+
+            if (addOwnerSelect) addOwnerSelect.innerHTML = optionsHtml;
+            if (editOwnerSelect) editOwnerSelect.innerHTML = optionsHtml;
+        }
+    }
+
+    // Load on start
+    loadUserDropdowns();
+
     const userForm = document.getElementById('user-form');
     const userFormTitle = document.getElementById('user-form-title');
     const userIdInput = document.getElementById('user-id');

@@ -51,7 +51,7 @@ class Admin {
         $password = !empty($data['password']) ? password_hash($data['password'], PASSWORD_ARGON2ID) : null;
         
         $sql = "INSERT INTO filesystem (parent_id, name, type, content, password, password_hint, is_hidden, owner_id) 
-                VALUES (:parent_id, :name, :type, :content, :password, :password_hint, :is_hidden, 1)";
+                VALUES (:parent_id, :name, :type, :content, :password, :password_hint, :is_hidden, :owner_id)";
                 
         $this->db->query($sql);
         $this->db->bind(':parent_id', $data['parent_id']);
@@ -66,6 +66,8 @@ class Admin {
         $this->db->bind(':password', $password);
         $this->db->bind(':password_hint', !empty($data['password_hint']) ? $data['password_hint'] : null);
         $this->db->bind(':is_hidden', isset($data['is_hidden']) ? 1 : 0);
+        $owner_id = (!empty($data['owner_id']) && $data['owner_id'] !== 'null') ? $data['owner_id'] : null;
+        $this->db->bind(':owner_id', $owner_id);
 
         try {
             if ($this->db->execute()) {
@@ -109,7 +111,8 @@ class Admin {
                     content = :content, 
                     password = :password, 
                     password_hint = :password_hint, 
-                    is_hidden = :is_hidden
+                    is_hidden = :is_hidden,
+                    owner_id = :owner_id
                 WHERE id = :id";
         
         $this->db->query($sql);
@@ -128,6 +131,8 @@ class Admin {
         $this->db->bind(':password', $password);
         $this->db->bind(':password_hint', !empty($data['password_hint']) ? $data['password_hint'] : null);
         $this->db->bind(':is_hidden', isset($data['is_hidden']) && $data['is_hidden'] ? 1 : 0);
+        $owner_id = (!empty($data['owner_id']) && $data['owner_id'] !== 'null') ? $data['owner_id'] : null;
+        $this->db->bind(':owner_id', $owner_id);
 
         if ($this->db->execute()) {
             return ['success' => true, 'message' => 'Item updated successfully!'];

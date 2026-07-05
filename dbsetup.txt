@@ -15,14 +15,14 @@ CREATE TABLE `filesystem` (
   `is_hidden` tinyint(1) DEFAULT 0,
   `password` varchar(255) DEFAULT NULL,
   `password_hint` varchar(255) DEFAULT NULL,
-  `owner_id` int(11) DEFAULT 1
+  `owner_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `filesystem`
 --
 INSERT INTO `filesystem` (`id`, `parent_id`, `name`, `type`, `content`, `is_hidden`, `password`, `password_hint`, `owner_id`) VALUES
-(1, NULL, '/', 'dir', NULL, 0, NULL, NULL, 1);
+(1, NULL, '/', 'dir', NULL, 0, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
