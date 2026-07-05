@@ -17,6 +17,14 @@ class Terminal {
         }
     }
 
+
+    private function _checkPermission($fileOwnerId) {
+        if ($fileOwnerId === null) {
+            return true;
+        }
+        return $fileOwnerId == $this->userId;
+    }
+
     public function executeCommand($commandStr) {
         $parts = preg_split('/\s+/', $commandStr, -1, PREG_SPLIT_NO_EMPTY);
         $command = strtolower(array_shift($parts));
@@ -82,7 +90,7 @@ class Terminal {
         }
         $filename = $args[0];
 
-        $this->db->query("SELECT id, content, type, password, password_hint FROM filesystem WHERE parent_id = :currentDirId AND name = :name");
+        $this->db->query("SELECT id, content, type, password, password_hint, owner_id FROM filesystem WHERE parent_id = :currentDirId AND name = :name");
         $this->db->bind(':currentDirId', $this->currentDirId);
         $this->db->bind(':name', $filename);
         $file = $this->db->single();
@@ -91,6 +99,10 @@ class Terminal {
             return ['output' => "cat: {$filename}: No such file or directory"];
         }
         
+        if (!$this->_checkPermission($file['owner_id'])) {
+            return ['output' => "Access Denied. No user permission."];
+        }
+
         if ($file['type'] === 'dir') {
             return ['output' => "cat: {$filename}: Is a directory"];
         }
@@ -141,12 +153,15 @@ class Terminal {
                 $_SESSION['current_directory_id'] = $current['parent_id'];
             }
         } else {
-            $this->db->query("SELECT id FROM filesystem WHERE parent_id = :currentDirId AND name = :name AND type = 'dir'");
+            $this->db->query("SELECT id, owner_id FROM filesystem WHERE parent_id = :currentDirId AND name = :name AND type = 'dir'");
             $this->db->bind(':currentDirId', $this->currentDirId);
             $this->db->bind(':name', $targetDirName);
             $target = $this->db->single();
 
             if ($target) {
+                if (!$this->_checkPermission($target['owner_id'])) {
+                    return ['output' => "cd: " . htmlspecialchars($targetDirName) . ": Access Denied. No user permission."];
+                }
                 $_SESSION['current_directory_id'] = $target['id'];
             } else {
                 return ['output' => "cd: " . htmlspecialchars($targetDirName) . ": No such directory"];
@@ -161,7 +176,7 @@ class Terminal {
         }
         $filename = $args[0];
 
-        $this->db->query("SELECT id, password FROM filesystem WHERE parent_id = :currentDirId AND name = :name");
+        $this->db->query("SELECT id, password, owner_id FROM filesystem WHERE parent_id = :currentDirId AND name = :name");
         $this->db->bind(':currentDirId', $this->currentDirId);
         $this->db->bind(':name', $filename);
         $file = $this->db->single();
@@ -170,6 +185,10 @@ class Terminal {
             return ['output' => "unlock: {$filename}: No such file."];
         }
         
+        if (!$this->_checkPermission($file['owner_id'])) {
+            return ['output' => "Access Denied. No user permission."];
+        }
+
         if (empty($file['password'])) {
             return ['output' => "File is not password protected."];
         }
@@ -204,13 +223,17 @@ class Terminal {
             $_SESSION['run_input'] = null;
         }
 
-        $this->db->query("SELECT content FROM filesystem WHERE parent_id = :currentDirId AND name = :name AND type = 'app'");
+        $this->db->query("SELECT content, owner_id FROM filesystem WHERE parent_id = :currentDirId AND name = :name AND type = 'app'");
         $this->db->bind(':currentDirId', $this->currentDirId);
         $this->db->bind(':name', $filename);
         $file = $this->db->single();
 
         if (!$file) {
             return ['output' => "run: {$filename}: No such executable file"];
+        }
+
+        if (!$this->_checkPermission($file['owner_id'])) {
+            return ['output' => "Access Denied. No user permission."];
         }
 
         $engine = new ScriptingEngine();
@@ -225,13 +248,17 @@ class Terminal {
         }
         $filename = $args[0];
 
-        $this->db->query("SELECT id, content, type, password, password_hint FROM filesystem WHERE parent_id = :currentDirId AND name = :name");
+        $this->db->query("SELECT id, content, type, password, password_hint, owner_id FROM filesystem WHERE parent_id = :currentDirId AND name = :name");
         $this->db->bind(':currentDirId', $this->currentDirId);
         $this->db->bind(':name', $filename);
         $file = $this->db->single();
 
         if (!$file) {
             return ['output' => "view: {$filename}: No such file"];
+        }
+
+        if (!$this->_checkPermission($file['owner_id'])) {
+            return ['output' => "Access Denied. No user permission."];
         }
 
         if ($file['type'] !== 'img') {

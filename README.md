@@ -33,6 +33,7 @@ It's built with PHP and a MySQL database on the back-end, with a dynamic, vanill
 
 - **Secure Logins:** Separate, secure logins for the administrator and players.
 - **Full Filesystem Manager:** A web UI to create, edit, and delete all files and directories.
+- **User Permissions:** Set access restrictions on files and directories. Assign ownership to a specific player or make it available to "All Users". Files restricted to other users will return "Access Denied" if an unauthorized user attempts to access them.
 - **Full User Manager:** An interface to add, edit, and delete player accounts.
 - **Branding & Theming:** A theme manager to customize the terminal's title, greetings, MOTD, and color scheme.
 

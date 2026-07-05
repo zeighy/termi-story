@@ -100,6 +100,11 @@ if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !
                         <input type="checkbox" id="is-hidden" name="is_hidden" value="1"> Hidden File
                     </label>
 
+                    <label for="item-owner">Owner (Optional):</label>
+                    <select id="item-owner" name="owner_id">
+                        <option value="">All Users</option>
+                    </select>
+
                     <button type="submit">Add Item</button>
                 </form>
                 <div id="form-response"></div>
@@ -217,6 +222,11 @@ if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !
                 <label class="checkbox-label">
                     <input type="checkbox" id="edit-is-hidden" name="is_hidden" value="1"> Hidden File
                 </label>
+
+                <label for="edit-item-owner">Owner (Optional):</label>
+                <select id="edit-item-owner" name="owner_id">
+                    <option value="">All Users</option>
+                </select>
 
                 <div class="modal-actions">
                     <button type="submit">Save Changes</button>
