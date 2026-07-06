@@ -527,7 +527,7 @@ async function renderMainView(directoryId) {
 
                 mainView.innerHTML = '';
                 children.forEach(item => {
-                    const isDir = item.icon === 'jstree-folder';
+                    const isDir = item.type === 'dir';
                     const iconChar = isDir ? '📁' : '📄';
                     const itemEl = document.createElement('div');
                     itemEl.className = 'fs-item ' + (isDir ? 'dir' : 'file');
