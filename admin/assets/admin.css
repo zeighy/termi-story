@@ -1,5 +1,5 @@
 :root {
-    --primary-color: var(--theme-prompt-user-color, #007bff);
+    --primary-color: var(--theme-prompt-path-color, #007bff);
     --secondary-color: #6c757d;
     --success-color: #28a745;
     --danger-color: #dc3545;
@@ -9,15 +9,6 @@
     --text-color: #333;
     --border-color: #ddd;
     --item-hover-bg: #f8f9fa;
-}
-    --secondary-color: #6c757d;
-    --success-color: #28a745;
-    --danger-color: #dc3545;
-    --warning-color: #ffc107;
-    --bg-color: #f4f6f9;
-    --card-bg: #ffffff;
-    --text-color: #333;
-    --border-color: #ddd;
 }
 
 body {
