@@ -394,7 +394,6 @@ $(function () {
         div.innerText = text;
         return div.innerHTML;
     }
-});
     // --- Image Processing ---
     function processImageFile(file, previewCanvasId, stringInputId, widthInputId) {
         if (!file) return;
@@ -599,3 +598,5 @@ function escapeHtml(unsafe) {
          .replace(/"/g, "&quot;")
          .replace(/'/g, "&#039;");
 }
+
+});
