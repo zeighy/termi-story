@@ -1,13 +1,14 @@
 :root {
-    --primary-color: #007bff;
+    --primary-color: var(--theme-prompt-path-color, #007bff);
     --secondary-color: #6c757d;
     --success-color: #28a745;
     --danger-color: #dc3545;
     --warning-color: #ffc107;
-    --bg-color: #f4f6f9;
+    --bg-color: var(--theme-bg-color, #f4f6f9);
     --card-bg: #ffffff;
     --text-color: #333;
     --border-color: #ddd;
+    --item-hover-bg: #f8f9fa;
 }
 
 body {
@@ -317,5 +318,137 @@ table tr:hover {
         margin-left: 0;
         margin-top: 15px;
         display: inline-block;
+    }
+}
+
+/* New Filesystem Layout */
+.filesystem-container {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.filesystem-sidebar {
+    flex: 0 0 300px; /* Fixed width sidebar */
+    background: var(--card-bg);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.filesystem-main {
+    flex: 1; /* Take up remaining space */
+    background: var(--card-bg);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    min-height: 400px;
+}
+
+.fs-main-header {
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+}
+
+.fs-main-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--theme-prompt-path-color, #444);
+    word-break: break-all;
+}
+
+.action-btn {
+    background-color: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    line-height: 1;
+    margin-top: 0;
+}
+
+.action-btn:hover {
+    opacity: 0.9;
+}
+
+.fs-grid-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 15px;
+}
+
+.fs-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+    text-align: center;
+    border: 1px solid transparent;
+}
+
+.fs-item:hover {
+    background-color: var(--item-hover-bg);
+    border-color: var(--border-color);
+    transform: translateY(-2px);
+}
+
+.fs-item-icon {
+    font-size: 3rem;
+    margin-bottom: 10px;
+    color: var(--secondary-color);
+}
+
+.fs-item.dir .fs-item-icon {
+    color: var(--theme-prompt-path-color, #007bff);
+}
+
+.fs-item-name {
+    font-size: 0.9rem;
+    word-break: break-word;
+    color: var(--text-color);
+}
+
+.fs-item-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 5px;
+    opacity: 0; /* Hidden by default */
+    transition: opacity 0.2s;
+}
+
+.fs-item:hover .fs-item-actions {
+    opacity: 1; /* Show on hover */
+}
+
+.fs-item-btn {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    color: white;
+}
+
+.fs-btn-edit { background-color: var(--warning-color); color: #333; }
+.fs-btn-delete { background-color: var(--danger-color); }
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+    .filesystem-container {
+        flex-direction: column;
+    }
+    .filesystem-sidebar {
+        flex: none;
+        width: 100%;
+        box-sizing: border-box;
     }
 }

@@ -63,6 +63,34 @@ $(function () {
     // FILESYSTEM LOGIC
     // ============================
     const addItemForm = document.getElementById('add-item-form');
+
+    const previewModal = document.getElementById('preview-modal');
+    document.getElementById('close-preview-btn').addEventListener('click', () => {
+        previewModal.style.display = 'none';
+    });
+
+    // Add Modal Elements
+    const addModal = document.getElementById('add-modal');
+    const btnOpenAddModal = document.getElementById('btn-open-add-modal');
+    const cancelAddBtn = document.getElementById('cancel-add-btn');
+
+    btnOpenAddModal.addEventListener('click', () => {
+        addModal.style.display = 'flex';
+        // Ensure form is reset properly when opened, but keep parent id
+        const parentId = document.getElementById('parent-id').value;
+        const dirName = document.getElementById('selected-dir-name').innerText;
+        document.getElementById('add-item-form').reset();
+        document.getElementById('parent-id').value = parentId;
+        document.getElementById('selected-dir-name').innerText = dirName;
+        // Trigger change to hide unneeded fields
+        document.getElementById('item-type').dispatchEvent(new Event('change'));
+    });
+
+    cancelAddBtn.addEventListener('click', () => {
+        addModal.style.display = 'none';
+        document.getElementById('form-response').innerText = '';
+    });
+
     const parentIdInput = document.getElementById('parent-id');
     const selectedDirName = document.getElementById('selected-dir-name');
     const itemTypeSelect = document.getElementById('item-type');
@@ -76,7 +104,10 @@ $(function () {
     const cancelEditBtn = document.getElementById('cancel-edit-btn');
     const editFormResponse = document.getElementById('edit-form-response');
 
-    $('#fs-tree').jstree({
+    $('#fs-tree').on('ready.jstree', function() {
+        // Load root dir automatically on start
+        renderMainView('1');
+    }).jstree({
         'core': {
             'data': {
                 'url': 'api_admin.php',
@@ -129,11 +160,13 @@ $(function () {
         if (node.type === 'dir') {
             parentIdInput.value = node.id;
             selectedDirName.textContent = node.text;
+            renderMainView(node.id); // Call render on directory select
         } else {
             // If a file is selected, set the parent to the file's parent
             parentIdInput.value = node.parent;
             const parentNode = $('#fs-tree').jstree(true).get_node(node.parent);
             selectedDirName.textContent = parentNode ? parentNode.text : '/';
+            renderMainView(node.parent); // Render parent dir if file selected
         }
 
         // Reset the item type to Directory and trigger change to update UI
@@ -221,6 +254,11 @@ $(function () {
         if (response.success) {
             alert(response.message);
             $('#fs-tree').jstree(true).refresh();
+            // Re-render current main view after a delay to allow jstree refresh
+            setTimeout(() => {
+                const currentDir = document.getElementById('parent-id').value;
+                if(currentDir) renderMainView(currentDir);
+            }, 300);
         } else {
             alert('Error: ' + (response.message || 'Could not delete item.'));
         }
@@ -361,7 +399,6 @@ $(function () {
         div.innerText = text;
         return div.innerHTML;
     }
-});
     // --- Image Processing ---
     function processImageFile(file, previewCanvasId, stringInputId, widthInputId) {
         if (!file) return;
@@ -457,3 +494,184 @@ $(function () {
             processImageFile(this.files[0], 'edit-image-preview', 'edit-item-image-string', 'edit-item-image-width');
         });
     }
+
+
+// --- Modern File Explorer Logic ---
+
+async function renderMainView(directoryId) {
+    const mainView = document.getElementById('fs-main-view');
+    const currentPathEl = document.getElementById('fs-current-path');
+
+    mainView.innerHTML = '<p>Loading...</p>';
+
+    try {
+        const response = await apiRequest('get_fs_tree');
+        // 'get_fs_tree' returns a flat array for jsTree, not {success: true, data: ...}
+        if (Array.isArray(response)) {
+            const data = response;
+            // Find current node path
+            const node = findNodeInTree(data, directoryId);
+            if (node) {
+                currentPathEl.innerText = buildPath(data, directoryId) || '/';
+
+                // Find children of this directory
+                // Actually the API returns flat data for jsTree or nested?
+                // Let's assume the API returns jsTree formatted data (which has 'parent')
+                // Wait, let's check what format jsTree expects. Usually it's flat with 'parent' property.
+                let children = data.filter(item => item.parent === (directoryId.toString() === '#' ? '#' : directoryId.toString()));
+
+                if (children.length === 0) {
+                    mainView.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--secondary-color);">Directory is empty.</p>';
+                    return;
+                }
+
+                mainView.innerHTML = '';
+                children.forEach(item => {
+                    const isDir = item.type === 'dir';
+                    const iconChar = isDir ? '📁' : '📄';
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'fs-item ' + (isDir ? 'dir' : 'file');
+                    itemEl.innerHTML = `
+                        <div class="fs-item-icon">${iconChar}</div>
+                        <div class="fs-item-name">${escapeHtml(item.text)}</div>
+                        <div class="fs-item-actions">
+                            <button class="fs-item-btn fs-btn-edit" data-id="${item.id}" onclick="event.stopPropagation(); triggerEdit('${item.id}')">Edit</button>
+                            <button class="fs-item-btn fs-btn-delete" data-id="${item.id}" onclick="event.stopPropagation(); triggerDelete('${item.id}')">Del</button>
+                        </div>
+                    `;
+
+                    if (isDir) {
+                        itemEl.addEventListener('dblclick', () => {
+                            $('#fs-tree').jstree('select_node', item.id);
+                        });
+                    } else {
+                        itemEl.addEventListener('dblclick', () => {
+                            triggerPreview(item.id);
+                        });
+                    }
+
+                    mainView.appendChild(itemEl);
+                });
+            } else {
+                 mainView.innerHTML = '<p>Directory not found.</p>';
+            }
+        } else {
+             mainView.innerHTML = '<p>Error loading contents.</p>';
+        }
+    } catch (e) {
+         mainView.innerHTML = '<p>Failed to communicate with server.</p>';
+         console.error(e);
+    }
+}
+
+async function triggerPreview(id) {
+    const item = await apiRequest('get_item', { id: id });
+    if (!item) {
+        alert('Could not fetch item details.');
+        return;
+    }
+
+    const previewModal = document.getElementById('preview-modal');
+    const previewTitle = document.getElementById('preview-title');
+    const previewContent = document.getElementById('preview-content');
+    const previewEditBtn = document.getElementById('preview-edit-btn');
+
+    previewTitle.innerText = item.name;
+
+    if (item.type === 'img' && item.content) {
+        // Format of img content: width;0s and 1s
+        const parts = item.content.split(';');
+        if (parts.length >= 2) {
+            const width = parseInt(parts[0], 10);
+            const pixelData = parts[1];
+            if (!isNaN(width) && width > 0) {
+                const height = Math.ceil(pixelData.length / width);
+
+                // Clear content and append canvas
+                previewContent.innerHTML = '';
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                canvas.style.maxWidth = '100%';
+                canvas.style.display = 'block';
+                canvas.style.border = '1px solid var(--border-color)';
+
+                // We'll just use the admin theme colors for preview, or terminal colors if available
+                const computedStyle = getComputedStyle(document.body);
+                const bgColor = computedStyle.getPropertyValue('--theme-bg-color').trim() || '#1a1a1a';
+                const textColor = computedStyle.getPropertyValue('--theme-text-color').trim() || '#00ff00';
+
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = textColor;
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const idx = y * width + x;
+                        if (idx < pixelData.length && pixelData[idx] === '1') {
+                            ctx.fillRect(x, y, 1, 1);
+                        }
+                    }
+                }
+
+                previewContent.appendChild(canvas);
+            } else {
+                previewContent.innerHTML = `<em>[Invalid Image Data]</em>`;
+            }
+        } else {
+            previewContent.innerHTML = `<em>[Invalid Image Format]</em>`;
+        }
+    } else {
+        previewContent.innerText = item.content || '<em>[Empty File]</em>';
+    }
+
+    previewEditBtn.onclick = () => {
+        previewModal.style.display = 'none';
+        triggerEdit(id);
+    };
+
+    previewModal.style.display = 'flex';
+}
+
+function triggerEdit(id) {
+    const tree = $('#fs-tree').jstree(true);
+    const node = tree.get_node(id);
+    if(node) {
+        // Find how jstree context menu triggers edit, and call it
+        // Or directly call openEditModal if available
+        openEditModal(id);
+    }
+}
+
+function triggerDelete(id) {
+    if(confirm('Are you sure you want to delete this item? This cannot be undone.')) {
+        deleteItem(id);
+    }
+}
+
+// Helper functions for path building (Assuming data is flat array with .id and .parent)
+function findNodeInTree(data, id) {
+    return data.find(item => item.id.toString() === id.toString());
+}
+
+function buildPath(data, id) {
+    let path = [];
+    let current = findNodeInTree(data, id);
+    while (current && current.id !== '#') {
+        path.unshift(current.text);
+        current = findNodeInTree(data, current.parent);
+    }
+    return '/' + path.join('/');
+}
+
+function escapeHtml(unsafe) {
+    return (unsafe || '').toString()
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+
+});
