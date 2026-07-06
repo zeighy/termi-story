@@ -141,6 +141,7 @@ As a player, your goal is to explore the pseudo-filesystem and uncover secrets.
 - **cat \[filename\]**: Displays a text file's contents.
 - **run \[appname.app\]**: Executes a script aka ‘program’.
 - **unlock \[filename\] \[password\]**: Unlocks a protected file.
+- **view \[filename\]**: Views an image file.
 - **reset**: Resets all your progress.
 - **help**: Displays available commands.
 - **clear**: Clears the screen.
@@ -149,7 +150,7 @@ As a player, your goal is to explore the pseudo-filesystem and uncover secrets.
 **Quality of Life Features**
 
 - **Command History**: Use the **Up** and **Down** arrow keys.
-- **Tab Autocomplete**: Press the **Tab** key to complete commands and filenames.
+- **Tab Autocomplete**: Press the **Tab** key to complete commands and filenames. A triple backtick (\`\`\`) or triple comma (,,,) can also be used for auto complete on devices with no tab key.
 
 **Important Note on Progress**
 
