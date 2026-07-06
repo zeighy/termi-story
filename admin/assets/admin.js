@@ -99,7 +99,10 @@ $(function () {
     const cancelEditBtn = document.getElementById('cancel-edit-btn');
     const editFormResponse = document.getElementById('edit-form-response');
 
-    $('#fs-tree').jstree({
+    $('#fs-tree').on('ready.jstree', function() {
+        // Load root dir automatically on start
+        renderMainView('1');
+    }).jstree({
         'core': {
             'data': {
                 'url': 'api_admin.php',
@@ -152,11 +155,13 @@ $(function () {
         if (node.type === 'dir') {
             parentIdInput.value = node.id;
             selectedDirName.textContent = node.text;
+            renderMainView(node.id); // Call render on directory select
         } else {
             // If a file is selected, set the parent to the file's parent
             parentIdInput.value = node.parent;
             const parentNode = $('#fs-tree').jstree(true).get_node(node.parent);
             selectedDirName.textContent = parentNode ? parentNode.text : '/';
+            renderMainView(node.parent); // Render parent dir if file selected
         }
 
         // Reset the item type to Directory and trigger change to update UI
