@@ -62,6 +62,40 @@ class ScriptingEngine {
             case 'WAIT':
                 $this->output .= "%%WAIT:" . intval($args) . "%%\n";
                 break;
+            case 'FETCH':
+                $this->handleFetch($args);
+                break;
+        }
+    }
+
+    private function handleFetch($args) {
+        $parts = explode('=', $args, 2);
+        if (count($parts) === 2) {
+            $varName = trim($parts[0]);
+            $url = trim($parts[1]);
+
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => 20
+                ],
+                'ssl' => [
+                    'timeout' => 20
+                ]
+            ]);
+
+            $result = @file_get_contents($url, false, $context);
+
+            $finalValue = "";
+            if ($result !== false) {
+                $data = @json_decode($result, true);
+                if (is_array($data) && isset($data['value'])) {
+                    // Sanitize by removing all non-alphanumeric characters
+                    $sanitizedValue = preg_replace('/[^a-zA-Z0-9]/', '', (string)$data['value']);
+                    $finalValue = is_numeric($sanitizedValue) ? (float)$sanitizedValue : $sanitizedValue;
+                }
+            }
+
+            $this->variables[$varName] = $finalValue;
         }
     }
 
