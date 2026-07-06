@@ -92,6 +92,9 @@ The heart of your interactive story is the scripting engine. This guide explains
 - **CALC \[variable_name\] = \[value1\] \[operator\] \[value2\]**: Performs a math operation (+, -, \*, /).
 - **WAIT \[milliseconds\]**: Pauses the script.
 - **IF \[condition\] / ELSE / ENDIF**: Controls the flow of your script.
+- **FETCH \[variable_name\] = \[URL\]**: Fetches data from a fixed URL endpoint. The endpoint must return JSON containing a "value" field. The value is sanitized to only allow alphanumeric characters and then stored in the specified variable. On error (connection issue, missing "value" field, etc.), the variable is set to an empty string ("").
+
+> **Note on FETCH:** You can also use `FETCH` to ping a URL (e.g., to count how many times a script has run). The server should still return JSON with a `value` field (like `{"value": "OK"}`) for the script to successfully proceed. You can then optionally reset the variable on the next line using `SET [variable_name] = ""`.
 
 **Variables Explained**
 
@@ -138,6 +141,7 @@ As a player, your goal is to explore the pseudo-filesystem and uncover secrets.
 - **cat \[filename\]**: Displays a text file's contents.
 - **run \[appname.app\]**: Executes a script aka ‘program’.
 - **unlock \[filename\] \[password\]**: Unlocks a protected file.
+- **view \[filename\]**: Views an image file.
 - **reset**: Resets all your progress.
 - **help**: Displays available commands.
 - **clear**: Clears the screen.
@@ -146,7 +150,7 @@ As a player, your goal is to explore the pseudo-filesystem and uncover secrets.
 **Quality of Life Features**
 
 - **Command History**: Use the **Up** and **Down** arrow keys.
-- **Tab Autocomplete**: Press the **Tab** key to complete commands and filenames.
+- **Tab Autocomplete**: Press the **Tab** key to complete commands and filenames. A triple comma (,,,) can also be used for auto complete on devices with no tab key.
 
 **Important Note on Progress**
 
