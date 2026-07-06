@@ -502,8 +502,9 @@ async function renderMainView(directoryId) {
 
     try {
         const response = await apiRequest('get_fs_tree');
-        if (response.success) {
-            const data = response.data;
+        // 'get_fs_tree' returns a flat array for jsTree, not {success: true, data: ...}
+        if (Array.isArray(response)) {
+            const data = response;
             // Find current node path
             const node = findNodeInTree(data, directoryId);
             if (node) {
