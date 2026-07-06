@@ -579,10 +579,49 @@ async function triggerPreview(id) {
     previewTitle.innerText = item.name;
 
     if (item.type === 'img' && item.content) {
-        // Try to decode image string and render in canvas
-        // Format of img content: 0s and 1s, with width set. But wait, get_item returns base64 or custom string?
-        // Let's just show text for now, or if it's too long, truncate.
-        previewContent.innerHTML = `<em>[Image Data]</em><br><div style="word-break: break-all; font-size: 0.8em; opacity: 0.7; margin-top: 10px;">${escapeHtml(item.content.substring(0, 500))}...</div>`;
+        // Format of img content: width;0s and 1s
+        const parts = item.content.split(';');
+        if (parts.length >= 2) {
+            const width = parseInt(parts[0], 10);
+            const pixelData = parts[1];
+            if (!isNaN(width) && width > 0) {
+                const height = Math.ceil(pixelData.length / width);
+
+                // Clear content and append canvas
+                previewContent.innerHTML = '';
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                canvas.style.maxWidth = '100%';
+                canvas.style.display = 'block';
+                canvas.style.border = '1px solid var(--border-color)';
+
+                // We'll just use the admin theme colors for preview, or terminal colors if available
+                const computedStyle = getComputedStyle(document.body);
+                const bgColor = computedStyle.getPropertyValue('--theme-bg-color').trim() || '#1a1a1a';
+                const textColor = computedStyle.getPropertyValue('--theme-text-color').trim() || '#00ff00';
+
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = textColor;
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const idx = y * width + x;
+                        if (idx < pixelData.length && pixelData[idx] === '1') {
+                            ctx.fillRect(x, y, 1, 1);
+                        }
+                    }
+                }
+
+                previewContent.appendChild(canvas);
+            } else {
+                previewContent.innerHTML = `<em>[Invalid Image Data]</em>`;
+            }
+        } else {
+            previewContent.innerHTML = `<em>[Invalid Image Format]</em>`;
+        }
     } else {
         previewContent.innerText = item.content || '<em>[Empty File]</em>';
     }
