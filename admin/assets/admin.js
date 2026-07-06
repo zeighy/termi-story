@@ -221,6 +221,11 @@ $(function () {
         if (response.success) {
             alert(response.message);
             $('#fs-tree').jstree(true).refresh();
+            // Re-render current main view after a delay to allow jstree refresh
+            setTimeout(() => {
+                const currentDir = document.getElementById('parent-id').value;
+                if(currentDir) renderMainView(currentDir);
+            }, 300);
         } else {
             alert('Error: ' + (response.message || 'Could not delete item.'));
         }
@@ -457,3 +462,111 @@ $(function () {
             processImageFile(this.files[0], 'edit-image-preview', 'edit-item-image-string', 'edit-item-image-width');
         });
     }
+
+
+// --- Modern File Explorer Logic ---
+
+async function renderMainView(directoryId) {
+    const mainView = document.getElementById('fs-main-view');
+    const currentPathEl = document.getElementById('fs-current-path');
+
+    mainView.innerHTML = '<p>Loading...</p>';
+
+    try {
+        const response = await apiRequest('get_fs_tree');
+        if (response.success) {
+            const data = response.data;
+            // Find current node path
+            const node = findNodeInTree(data, directoryId);
+            if (node) {
+                currentPathEl.innerText = buildPath(data, directoryId) || '/';
+
+                // Find children of this directory
+                // Actually the API returns flat data for jsTree or nested?
+                // Let's assume the API returns jsTree formatted data (which has 'parent')
+                // Wait, let's check what format jsTree expects. Usually it's flat with 'parent' property.
+                let children = data.filter(item => item.parent === (directoryId.toString() === '#' ? '#' : directoryId.toString()));
+
+                if (children.length === 0) {
+                    mainView.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--secondary-color);">Directory is empty.</p>';
+                    return;
+                }
+
+                mainView.innerHTML = '';
+                children.forEach(item => {
+                    const isDir = item.icon === 'jstree-folder';
+                    const iconChar = isDir ? '📁' : '📄';
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'fs-item ' + (isDir ? 'dir' : 'file');
+                    itemEl.innerHTML = `
+                        <div class="fs-item-icon">${iconChar}</div>
+                        <div class="fs-item-name">${escapeHtml(item.text)}</div>
+                        <div class="fs-item-actions">
+                            <button class="fs-item-btn fs-btn-edit" data-id="${item.id}" onclick="event.stopPropagation(); triggerEdit('${item.id}')">Edit</button>
+                            <button class="fs-item-btn fs-btn-delete" data-id="${item.id}" onclick="event.stopPropagation(); triggerDelete('${item.id}')">Del</button>
+                        </div>
+                    `;
+
+                    if (isDir) {
+                        itemEl.addEventListener('dblclick', () => {
+                            $('#fs-tree').jstree('select_node', item.id);
+                        });
+                    } else {
+                        itemEl.addEventListener('dblclick', () => {
+                            triggerEdit(item.id);
+                        });
+                    }
+
+                    mainView.appendChild(itemEl);
+                });
+            } else {
+                 mainView.innerHTML = '<p>Directory not found.</p>';
+            }
+        } else {
+             mainView.innerHTML = '<p>Error loading contents.</p>';
+        }
+    } catch (e) {
+         mainView.innerHTML = '<p>Failed to communicate with server.</p>';
+         console.error(e);
+    }
+}
+
+function triggerEdit(id) {
+    const tree = $('#fs-tree').jstree(true);
+    const node = tree.get_node(id);
+    if(node) {
+        // Find how jstree context menu triggers edit, and call it
+        // Or directly call openEditModal if available
+        openEditModal(id);
+    }
+}
+
+function triggerDelete(id) {
+    if(confirm('Are you sure you want to delete this item? This cannot be undone.')) {
+        deleteItem(id);
+    }
+}
+
+// Helper functions for path building (Assuming data is flat array with .id and .parent)
+function findNodeInTree(data, id) {
+    return data.find(item => item.id.toString() === id.toString());
+}
+
+function buildPath(data, id) {
+    let path = [];
+    let current = findNodeInTree(data, id);
+    while (current && current.id !== '#') {
+        path.unshift(current.text);
+        current = findNodeInTree(data, current.parent);
+    }
+    return '/' + path.join('/');
+}
+
+function escapeHtml(unsafe) {
+    return (unsafe || '').toString()
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}

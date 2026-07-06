@@ -5,6 +5,17 @@ if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !
     header('Location: login.php');
     exit;
 }
+
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../src/Database.php';
+$db = new Database();
+$db->query("SELECT name, value FROM themes");
+$themeResults = $db->resultSet();
+$theme = [];
+foreach ($themeResults as $row) {
+    $theme[$row['name']] = $row['value'];
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -14,6 +25,14 @@ if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !
     <title>Admin Panel - Filesystem</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
     <link rel="stylesheet" href="assets/admin.css">
+    <style>
+        :root {
+            --theme-bg-color: <?php echo htmlspecialchars($theme['background_color'] ?? '#1a1a1a'); ?>;
+            --theme-text-color: <?php echo htmlspecialchars($theme['text_color'] ?? '#00ff00'); ?>;
+            --theme-prompt-user-color: <?php echo htmlspecialchars($theme['prompt_color_user'] ?? '#50fa7b'); ?>;
+            --theme-prompt-path-color: <?php echo htmlspecialchars($theme['prompt_color_path'] ?? '#bd93f9'); ?>;
+        }
+    </style>
 </head>
 <body>
     <div class="header">
@@ -55,15 +74,30 @@ if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !
     </div>
 
     <div id="tab-content-filesystem" class="tab-content active">
-        <div class="container">
-            <div class="filesystem-viewer">
-                <h2>Current Filesystem</h2>
+        <div class="container filesystem-container">
+            <div class="filesystem-sidebar">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>Directories</h2>
+                    <button type="button" id="btn-open-add-modal" class="action-btn" title="Add Item">+</button>
+                </div>
                 <div id="fs-tree"></div>
             </div>
-            <div class="form-container">
-                <h2>Add New Item</h2>
-                <form id="add-item-form">
-                    <p>Selected Directory: <strong id="selected-dir-name">/</strong></p>
+            <div class="filesystem-main">
+                <div class="fs-main-header">
+                    <h2 id="fs-current-path">/</h2>
+                </div>
+                <div id="fs-main-view" class="fs-grid-view">
+                    <!-- Loaded dynamically via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="add-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content form-container" style="max-height: 90vh; overflow-y: auto;">
+            <h2>Add New Item</h2>
+            <form id="add-item-form">
+                <p>Selected Directory: <strong id="selected-dir-name">/</strong></p>
                     <input type="hidden" id="parent-id" name="parent_id" value="1">
 
                     <label for="item-type">Type:</label>
@@ -105,10 +139,12 @@ if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !
                         <option value="">All Users</option>
                     </select>
 
-                    <button type="submit">Add Item</button>
+                    <div class="modal-actions">
+                        <button type="submit">Add Item</button>
+                        <button type="button" id="cancel-add-btn" style="background-color: var(--secondary-color);">Cancel</button>
+                    </div>
                 </form>
                 <div id="form-response"></div>
-            </div>
         </div>
     </div>
 
