@@ -150,7 +150,7 @@ As a player, your goal is to explore the pseudo-filesystem and uncover secrets.
 **Quality of Life Features**
 
 - **Command History**: Use the **Up** and **Down** arrow keys.
-- **Tab Autocomplete**: Press the **Tab** key to complete commands and filenames. A triple backtick (\`\`\`) or triple comma (,,,) can also be used for auto complete on devices with no tab key.
+- **Tab Autocomplete**: Press the **Tab** key to complete commands and filenames. A triple comma (,,,) can also be used for auto complete on devices with no tab key.
 
 **Important Note on Progress**
 
