@@ -63,6 +63,29 @@ $(function () {
     // FILESYSTEM LOGIC
     // ============================
     const addItemForm = document.getElementById('add-item-form');
+
+    // Add Modal Elements
+    const addModal = document.getElementById('add-modal');
+    const btnOpenAddModal = document.getElementById('btn-open-add-modal');
+    const cancelAddBtn = document.getElementById('cancel-add-btn');
+
+    btnOpenAddModal.addEventListener('click', () => {
+        addModal.style.display = 'flex';
+        // Ensure form is reset properly when opened, but keep parent id
+        const parentId = document.getElementById('parent-id').value;
+        const dirName = document.getElementById('selected-dir-name').innerText;
+        document.getElementById('add-item-form').reset();
+        document.getElementById('parent-id').value = parentId;
+        document.getElementById('selected-dir-name').innerText = dirName;
+        // Trigger change to hide unneeded fields
+        document.getElementById('item-type').dispatchEvent(new Event('change'));
+    });
+
+    cancelAddBtn.addEventListener('click', () => {
+        addModal.style.display = 'none';
+        document.getElementById('form-response').innerText = '';
+    });
+
     const parentIdInput = document.getElementById('parent-id');
     const selectedDirName = document.getElementById('selected-dir-name');
     const itemTypeSelect = document.getElementById('item-type');
