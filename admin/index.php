@@ -76,11 +76,11 @@ foreach ($themeResults as $row) {
     <div id="tab-content-filesystem" class="tab-content active">
         <div class="container filesystem-container">
             <div class="filesystem-sidebar">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h2>Directories</h2>
+                <div class="sidebar-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 10px;">
+                    <h2 style="margin: 0;">Directories</h2>
                     <button type="button" id="btn-open-add-modal" class="action-btn" title="Add Item">+</button>
                 </div>
-                <div id="fs-tree"></div>
+                <div id="fs-tree" style="overflow-y: auto; max-height: calc(80vh - 60px);"></div>
             </div>
             <div class="filesystem-main">
                 <div class="fs-main-header">
@@ -223,6 +223,20 @@ foreach ($themeResults as $row) {
                     <button type="submit">Save Theme</button>
                 </form>
                 <div id="theme-form-response"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="preview-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px;">
+                <h2 id="preview-title" style="margin: 0;">File Preview</h2>
+                <button type="button" id="close-preview-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--secondary-color);">&times;</button>
+            </div>
+            <div id="preview-content" style="white-space: pre-wrap; font-family: monospace; background: #f8f9fa; padding: 15px; border-radius: 5px; min-height: 100px;">
+            </div>
+            <div style="text-align: right; margin-top: 15px;">
+                <button type="button" id="preview-edit-btn" class="action-btn" style="background-color: var(--warning-color); color: #333;">Edit File</button>
             </div>
         </div>
     </div>

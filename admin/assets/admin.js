@@ -64,6 +64,11 @@ $(function () {
     // ============================
     const addItemForm = document.getElementById('add-item-form');
 
+    const previewModal = document.getElementById('preview-modal');
+    document.getElementById('close-preview-btn').addEventListener('click', () => {
+        previewModal.style.display = 'none';
+    });
+
     // Add Modal Elements
     const addModal = document.getElementById('add-modal');
     const btnOpenAddModal = document.getElementById('btn-open-add-modal');
@@ -541,7 +546,7 @@ async function renderMainView(directoryId) {
                         });
                     } else {
                         itemEl.addEventListener('dblclick', () => {
-                            triggerEdit(item.id);
+                            triggerPreview(item.id);
                         });
                     }
 
@@ -557,6 +562,37 @@ async function renderMainView(directoryId) {
          mainView.innerHTML = '<p>Failed to communicate with server.</p>';
          console.error(e);
     }
+}
+
+async function triggerPreview(id) {
+    const item = await apiRequest('get_item', { id: id });
+    if (!item) {
+        alert('Could not fetch item details.');
+        return;
+    }
+
+    const previewModal = document.getElementById('preview-modal');
+    const previewTitle = document.getElementById('preview-title');
+    const previewContent = document.getElementById('preview-content');
+    const previewEditBtn = document.getElementById('preview-edit-btn');
+
+    previewTitle.innerText = item.name;
+
+    if (item.type === 'img' && item.content) {
+        // Try to decode image string and render in canvas
+        // Format of img content: 0s and 1s, with width set. But wait, get_item returns base64 or custom string?
+        // Let's just show text for now, or if it's too long, truncate.
+        previewContent.innerHTML = `<em>[Image Data]</em><br><div style="word-break: break-all; font-size: 0.8em; opacity: 0.7; margin-top: 10px;">${escapeHtml(item.content.substring(0, 500))}...</div>`;
+    } else {
+        previewContent.innerText = item.content || '<em>[Empty File]</em>';
+    }
+
+    previewEditBtn.onclick = () => {
+        previewModal.style.display = 'none';
+        triggerEdit(id);
+    };
+
+    previewModal.style.display = 'flex';
 }
 
 function triggerEdit(id) {
