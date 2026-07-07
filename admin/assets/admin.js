@@ -140,9 +140,7 @@ $(function () {
                     'delete': {
                         'label': 'Delete',
                         'action': function () {
-                            if (confirm('Are you sure you want to delete this item? This cannot be undone.')) {
-                                deleteItem(node.id);
-                            }
+                            triggerDelete(node.id, node.text);
                         }
                     }
                 };
@@ -181,7 +179,7 @@ $(function () {
             const type = this.value;
             addContentWrapper.style.display = (type === 'txt' || type === 'app') ? 'block' : 'none';
             document.getElementById('image-upload-wrapper').style.display = (type === 'img') ? 'block' : 'none';
-            addPasswordWrapper.style.display = (type === 'txt') ? 'block' : 'none';
+            addPasswordWrapper.style.display = (type === 'txt' || type === 'img') ? 'block' : 'none';
         });
 
         addItemForm.addEventListener('submit', async function (e) {
@@ -215,7 +213,7 @@ $(function () {
         const isDir = item.type === 'dir';
         document.getElementById('edit-content-wrapper').style.display = (item.type === 'txt' || item.type === 'app') ? 'block' : 'none';
         document.getElementById('edit-image-upload-wrapper').style.display = (item.type === 'img') ? 'block' : 'none';
-        document.getElementById('edit-password-wrapper').style.display = item.type === 'txt' ? 'block' : 'none';
+        document.getElementById('edit-password-wrapper').style.display = (item.type === 'txt' || item.type === 'img') ? 'block' : 'none';
 
         if (!isDir) {
             document.getElementById('edit-item-content').value = item.content || '';
@@ -498,9 +496,15 @@ $(function () {
 
 // --- Modern File Explorer Logic ---
 
+let selectedFileId = null;
+let selectedFileName = null;
+
 async function renderMainView(directoryId) {
     const mainView = document.getElementById('fs-main-view');
     const currentPathEl = document.getElementById('fs-current-path');
+
+    // Clear selection state when navigating
+    clearSelection();
 
     mainView.innerHTML = '<p>Loading...</p>';
 
@@ -531,14 +535,28 @@ async function renderMainView(directoryId) {
                     const iconChar = isDir ? '📁' : '📄';
                     const itemEl = document.createElement('div');
                     itemEl.className = 'fs-item ' + (isDir ? 'dir' : 'file');
+                    itemEl.dataset.id = item.id;
+                    itemEl.dataset.name = item.text;
                     itemEl.innerHTML = `
                         <div class="fs-item-icon">${iconChar}</div>
                         <div class="fs-item-name">${escapeHtml(item.text)}</div>
-                        <div class="fs-item-actions">
-                            <button class="fs-item-btn fs-btn-edit" data-id="${item.id}" onclick="event.stopPropagation(); triggerEdit('${item.id}')">Edit</button>
-                            <button class="fs-item-btn fs-btn-delete" data-id="${item.id}" onclick="event.stopPropagation(); triggerDelete('${item.id}')">Del</button>
-                        </div>
                     `;
+
+                    itemEl.addEventListener('click', (e) => {
+                        e.stopPropagation();
+
+                        // Clear previous selection visually
+                        const prevSelected = document.querySelector('.fs-item.selected');
+                        if (prevSelected) {
+                            prevSelected.classList.remove('selected');
+                        }
+
+                        itemEl.classList.add('selected');
+                        selectedFileId = item.id;
+                        selectedFileName = item.text;
+
+                        document.getElementById('fs-main-actions').style.display = 'flex';
+                    });
 
                     if (isDir) {
                         itemEl.addEventListener('dblclick', () => {
@@ -563,6 +581,35 @@ async function renderMainView(directoryId) {
          console.error(e);
     }
 }
+
+function clearSelection() {
+    selectedFileId = null;
+    selectedFileName = null;
+    document.getElementById('fs-main-actions').style.display = 'none';
+    const selectedItem = document.querySelector('.fs-item.selected');
+    if (selectedItem) {
+        selectedItem.classList.remove('selected');
+    }
+}
+
+// Clear selection when clicking empty area in main view
+document.querySelector('.filesystem-main').addEventListener('click', () => {
+    clearSelection();
+});
+
+document.getElementById('main-edit-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (selectedFileId) {
+        triggerEdit(selectedFileId);
+    }
+});
+
+document.getElementById('main-delete-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (selectedFileId && selectedFileName) {
+        triggerDelete(selectedFileId, selectedFileName);
+    }
+});
 
 async function triggerPreview(id) {
     const item = await apiRequest('get_item', { id: id });
@@ -644,8 +691,9 @@ function triggerEdit(id) {
     }
 }
 
-function triggerDelete(id) {
-    if(confirm('Are you sure you want to delete this item? This cannot be undone.')) {
+function triggerDelete(id, name) {
+    const itemName = name ? `"${name}"` : 'this item';
+    if(confirm(`Are you sure you want to delete ${itemName}? This cannot be undone.`)) {
         deleteItem(id);
     }
 }

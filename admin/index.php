@@ -83,8 +83,12 @@ foreach ($themeResults as $row) {
                 <div id="fs-tree" style="overflow-y: auto; max-height: calc(80vh - 60px);"></div>
             </div>
             <div class="filesystem-main">
-                <div class="fs-main-header">
-                    <h2 id="fs-current-path">/</h2>
+                <div class="fs-main-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2 id="fs-current-path" style="margin: 0;">/</h2>
+                    <div id="fs-main-actions" style="display: none; gap: 10px;">
+                        <button type="button" id="main-edit-btn" class="action-btn" style="background-color: var(--warning-color); color: #333; font-size: 1rem; padding: 5px 15px; margin: 0;">Edit</button>
+                        <button type="button" id="main-delete-btn" class="action-btn" style="background-color: var(--danger-color); font-size: 1rem; padding: 5px 15px; margin: 0;">Delete</button>
+                    </div>
                 </div>
                 <div id="fs-main-view" class="fs-grid-view">
                     <!-- Loaded dynamically via JS -->
