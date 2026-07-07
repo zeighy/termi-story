@@ -401,6 +401,12 @@ table tr:hover {
     transform: translateY(-2px);
 }
 
+.fs-item.selected {
+    background-color: var(--item-hover-bg);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 5px rgba(0,123,255,0.5);
+}
+
 .fs-item-icon {
     font-size: 3rem;
     margin-bottom: 10px;
