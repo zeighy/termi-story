@@ -705,13 +705,8 @@ if (moveForm) {
 
         const response = await apiRequest('move_item', { data: data });
         handleFormResponse(response, moveFormResponse, () => {
-            $('#fs-tree').jstree(true).refresh();
             closeMoveModal();
-            // Re-render current main view after a delay to allow jstree refresh
-            setTimeout(() => {
-                const selectedNodes = $('#fs-tree').jstree(true).get_selected();
-                if (selectedNodes.length > 0) renderMainView(selectedNodes[0]);
-            }, 300);
+            window.location.reload();
         });
     });
 }
