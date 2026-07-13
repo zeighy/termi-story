@@ -159,6 +159,65 @@ class Admin {
         }
         return ['success' => false, 'message' => 'Failed to delete item.'];
     }
+
+    public function moveItem($data) {
+        if (empty($data['id']) || empty($data['new_parent_id'])) {
+            return ['success' => false, 'message' => 'Item ID and New Parent ID are required.'];
+        }
+
+        $id = $data['id'];
+        $new_parent_id = $data['new_parent_id'];
+
+        if ($id == 1) {
+            return ['success' => false, 'message' => 'Cannot move the root directory.'];
+        }
+
+        if ($id == $new_parent_id) {
+            return ['success' => false, 'message' => 'Cannot move an item into itself.'];
+        }
+
+        $item = $this->getItem($id);
+        if (!$item) {
+            return ['success' => false, 'message' => 'Item not found.'];
+        }
+
+        $new_parent = $this->getItem($new_parent_id);
+        if (!$new_parent || $new_parent['type'] !== 'dir') {
+            return ['success' => false, 'message' => 'Invalid destination directory.'];
+        }
+
+        // Prevent moving a directory into its own descendants
+        if ($item['type'] === 'dir') {
+            $current_check_id = $new_parent_id;
+            while ($current_check_id != 1 && $current_check_id != null) {
+                if ($current_check_id == $id) {
+                    return ['success' => false, 'message' => 'Cannot move a directory into its own descendant.'];
+                }
+                $parent_check = $this->getItem($current_check_id);
+                if ($parent_check) {
+                    $current_check_id = $parent_check['parent_id'];
+                } else {
+                    break;
+                }
+            }
+        }
+
+        $this->db->query("UPDATE filesystem SET parent_id = :new_parent_id WHERE id = :id");
+        $this->db->bind(':new_parent_id', $new_parent_id);
+        $this->db->bind(':id', $id);
+
+        try {
+            if ($this->db->execute()) {
+                return ['success' => true, 'message' => 'Item moved successfully!'];
+            }
+        } catch (PDOException $e) {
+            if ($e->getCode() == 23000) {
+                 return ['success' => false, 'message' => 'Error: An item with this name already exists in the destination directory.'];
+            }
+            return ['success' => false, 'message' => 'Database error.'];
+        }
+        return ['success' => false, 'message' => 'Failed to move item.'];
+    }
     
     // --- User Methods ---
 
