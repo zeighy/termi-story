@@ -48,6 +48,9 @@ switch ($action) {
     case 'delete_item':
         $response = $admin->deleteItem($id);
         break;
+    case 'move_item':
+        $response = $admin->moveItem($data);
+        break;
 
     // User Actions
     case 'add_user':

@@ -254,8 +254,8 @@ $(function () {
             $('#fs-tree').jstree(true).refresh();
             // Re-render current main view after a delay to allow jstree refresh
             setTimeout(() => {
-                const currentDir = document.getElementById('parent-id').value;
-                if(currentDir) renderMainView(currentDir);
+                const selectedNodes = $('#fs-tree').jstree(true).get_selected();
+                if (selectedNodes.length > 0) renderMainView(selectedNodes[0]);
             }, 300);
         } else {
             alert('Error: ' + (response.message || 'Could not delete item.'));
@@ -610,6 +610,106 @@ document.getElementById('main-delete-btn').addEventListener('click', (e) => {
         triggerDelete(selectedFileId, selectedFileName);
     }
 });
+
+const moveModal = document.getElementById('move-modal');
+const moveForm = document.getElementById('move-item-form');
+const moveFormResponse = document.getElementById('move-form-response');
+const cancelMoveBtn = document.getElementById('cancel-move-btn');
+
+document.getElementById('main-move-btn').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!selectedFileId) return;
+
+    document.getElementById('move-item-id').value = selectedFileId;
+
+    // Load directories
+    const response = await apiRequest('get_fs_tree');
+    if (Array.isArray(response)) {
+        const select = document.getElementById('move-target-dir');
+        select.innerHTML = '';
+
+        // Helper to find descendants to exclude
+        function getDescendants(data, id) {
+            let descendants = [];
+            let children = data.filter(item => item.parent.toString() === id.toString());
+            children.forEach(child => {
+                descendants.push(child.id);
+                descendants = descendants.concat(getDescendants(data, child.id));
+            });
+            return descendants;
+        }
+
+        const excludedIds = [selectedFileId, ...getDescendants(response, selectedFileId)].map(id => id.toString());
+
+        // Build hierarchy map
+        const nodeMap = {};
+        response.forEach(item => {
+            if (item.type === 'dir') {
+                nodeMap[item.id] = { ...item, children: [] };
+            }
+        });
+
+        const rootNodes = [];
+        Object.values(nodeMap).forEach(node => {
+            if (node.parent === '#' || node.parent === null) {
+                rootNodes.push(node);
+            } else if (nodeMap[node.parent]) {
+                nodeMap[node.parent].children.push(node);
+            }
+        });
+
+        function sortNodes(nodes) {
+            nodes.sort((a, b) => a.text.localeCompare(b.text));
+            nodes.forEach(node => {
+                if (node.children.length > 0) {
+                    sortNodes(node.children);
+                }
+            });
+        }
+        sortNodes(rootNodes);
+
+        function populateSelect(nodes, level) {
+            nodes.forEach(node => {
+                if (!excludedIds.includes(node.id.toString())) {
+                    const option = document.createElement('option');
+                    option.value = node.id;
+                    const prefix = '> '.repeat(level);
+                    option.textContent = prefix + (node.id.toString() === '1' && node.text === '/' ? '/' : node.text);
+                    select.appendChild(option);
+                }
+                populateSelect(node.children, level + 1);
+            });
+        }
+
+        populateSelect(rootNodes, 0);
+
+        moveModal.style.display = 'flex';
+    }
+});
+
+function closeMoveModal() {
+    moveModal.style.display = 'none';
+    moveForm.reset();
+    moveFormResponse.textContent = '';
+}
+
+if (cancelMoveBtn) {
+    cancelMoveBtn.addEventListener('click', closeMoveModal);
+}
+
+if (moveForm) {
+    moveForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const formData = new FormData(moveForm);
+        const data = Object.fromEntries(formData.entries());
+
+        const response = await apiRequest('move_item', { data: data });
+        handleFormResponse(response, moveFormResponse, () => {
+            closeMoveModal();
+            window.location.reload();
+        });
+    });
+}
 
 async function triggerPreview(id) {
     const item = await apiRequest('get_item', { id: id });

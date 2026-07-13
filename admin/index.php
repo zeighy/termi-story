@@ -87,6 +87,7 @@ foreach ($themeResults as $row) {
                     <h2 id="fs-current-path" style="margin: 0;">/</h2>
                     <div id="fs-main-actions" style="display: none; gap: 10px;">
                         <button type="button" id="main-edit-btn" class="action-btn" style="background-color: var(--warning-color); color: #333; font-size: 1rem; padding: 5px 15px; margin: 0;">Edit</button>
+                        <button type="button" id="main-move-btn" class="action-btn" style="background-color: #17a2b8; font-size: 1rem; padding: 5px 15px; margin: 0;">Move</button>
                         <button type="button" id="main-delete-btn" class="action-btn" style="background-color: var(--danger-color); font-size: 1rem; padding: 5px 15px; margin: 0;">Delete</button>
                     </div>
                 </div>
@@ -288,6 +289,26 @@ foreach ($themeResults as $row) {
                 </div>
             </form>
             <div id="edit-form-response"></div>
+        </div>
+    </div>
+
+    <div id="move-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>Move Item</h2>
+            <form id="move-item-form">
+                <input type="hidden" id="move-item-id" name="id">
+
+                <label for="move-target-dir">Select Destination:</label>
+                <select id="move-target-dir" name="new_parent_id" required>
+                    <!-- Options populated by JS -->
+                </select>
+
+                <div class="modal-actions">
+                    <button type="submit">Move Item</button>
+                    <button type="button" id="cancel-move-btn" style="background-color: var(--secondary-color);">Cancel</button>
+                </div>
+            </form>
+            <div id="move-form-response"></div>
         </div>
     </div>
 
