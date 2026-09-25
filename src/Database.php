@@ -64,6 +64,23 @@ class Database {
         return $this->stmt->fetchAll();
     }
 
+
+    public function beginTransaction() {
+        return $this->dbh->beginTransaction();
+    }
+
+    public function commit() {
+        return $this->dbh->commit();
+    }
+
+    public function rollBack() {
+        return $this->dbh->rollBack();
+    }
+
+    public function lastInsertId() {
+        return $this->dbh->lastInsertId();
+    }
+
     // Get single record as object
     public function single() {
         $this->execute();

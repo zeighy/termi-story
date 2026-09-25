@@ -37,6 +37,13 @@ It's built with PHP and a MySQL database on the back-end, with a dynamic, vanill
 - **Full User Manager:** An interface to add, edit, and delete player accounts.
 - **Branding & Theming:** A theme manager to customize the terminal's title, greetings, MOTD, and color scheme.
 
+
+**Story Backup (Admin)**
+
+- The **Story** tab in the admin panel can export the full virtual filesystem (and theme) to a JSON file, and import it back in **merge** or **replace** mode.
+- File lock passwords are exported as hashes (not plaintext). Owners are matched by username on import.
+- A command-line exporter still lives at `config/export_story.php` for text dumps; the admin JSON format is preferred for round-trips between installs.
+
 **File Structure**
 
 The project is organized into four main directories to separate concerns.

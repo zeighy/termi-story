@@ -76,6 +76,16 @@ switch ($action) {
         echo json_encode(['success' => true, 'data' => $settings]);
         exit();
 
+    case 'export_story':
+        $response = $admin->exportStory();
+        break;
+    case 'import_story':
+        $payload = $data['payload'] ?? null;
+        $mode = $data['mode'] ?? 'merge';
+        $includeTheme = !empty($data['include_theme']);
+        $response = $admin->importStory($payload, $mode, $includeTheme);
+        break;
+
     default:
         $response['message'] = 'Invalid action specified.';
         break;

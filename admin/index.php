@@ -41,6 +41,7 @@ foreach ($themeResults as $row) {
             <button class="tab-link active" data-tab="filesystem">Filesystem</button>
             <button class="tab-link" data-tab="users">Users</button>
             <button class="tab-link" data-tab="theme">Theme</button>
+            <button class="tab-link" data-tab="story">Story</button>
             <a href="logout.php" class="logout-link">Logout</a>
         </div>
     </div>
@@ -68,6 +69,16 @@ foreach ($themeResults as $row) {
                 <ul>
                     <li><b>Colors & Text:</b> Adjust colors and text instantly.</li>
                     <li><b>Save:</b> Changes are applied immediately upon saving.</li>
+                </ul>
+            </div>
+
+            <div class="help-tab" data-tab="story" style="display: none;">
+                <p>Export or import the story filesystem (and optionally theme) as a JSON file.</p>
+                <ul>
+                    <li><b>Export:</b> Downloads a portable dump of every file and folder (paths, content, lock hashes, owners by username, and theme).</li>
+                    <li><b>Import (merge):</b> Creates missing paths and updates existing ones. Does not delete items absent from the file.</li>
+                    <li><b>Import (replace):</b> Deletes everything under <code>/</code> except the root, then recreates from the file. Use with care.</li>
+                    <li><b>Owners:</b> Matched by username. Unknown usernames become All Users.</li>
                 </ul>
             </div>
         </div>
@@ -228,6 +239,38 @@ foreach ($themeResults as $row) {
                     <button type="submit">Save Theme</button>
                 </form>
                 <div id="theme-form-response"></div>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="tab-content-story" class="tab-content" style="display: none;">
+        <div class="container-full">
+            <div class="form-container" style="width: 100%; max-width: 800px; margin: auto;">
+                <h2>Export Story</h2>
+                <p>Download the full filesystem (and theme settings) as a JSON file you can back up or move between installs.</p>
+                <button type="button" id="btn-export-story">Download Export</button>
+                <div id="export-story-response" style="margin-top: 10px;"></div>
+
+                <h2 style="margin-top: 2em;">Import Story</h2>
+                <p>Upload a previously exported JSON file. Replace mode permanently deletes existing story files under <code>/</code>.</p>
+                <form id="import-story-form">
+                    <label for="import-story-file">Export file (.json):</label>
+                    <input type="file" id="import-story-file" accept="application/json,.json" required>
+
+                    <label for="import-story-mode">Mode:</label>
+                    <select id="import-story-mode" name="mode">
+                        <option value="merge">Merge (create missing, update existing)</option>
+                        <option value="replace">Replace (wipe filesystem, then import)</option>
+                    </select>
+
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="import-include-theme" value="1"> Also import theme settings
+                    </label>
+
+                    <button type="submit">Import Story</button>
+                </form>
+                <div id="import-story-response" style="margin-top: 10px;"></div>
             </div>
         </div>
     </div>
