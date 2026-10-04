@@ -22,6 +22,8 @@ $(function () {
             loadUsers();
         } else if (tabName === 'theme') {
             loadThemeSettings();
+        } else if (tabName === 'story') {
+            // Story tab is event-driven; nothing to preload.
         }
     });
 
@@ -797,6 +799,89 @@ function triggerDelete(id, name) {
         deleteItem(id);
     }
 }
+
+
+    // ============================
+    // STORY EXPORT / IMPORT
+    // ============================
+    const exportStoryBtn = document.getElementById('btn-export-story');
+    const exportStoryResponse = document.getElementById('export-story-response');
+    const importStoryForm = document.getElementById('import-story-form');
+    const importStoryResponse = document.getElementById('import-story-response');
+
+    if (exportStoryBtn) {
+        exportStoryBtn.addEventListener('click', async () => {
+            exportStoryResponse.style.color = '';
+            exportStoryResponse.textContent = 'Preparing export…';
+            const result = await apiRequest('export_story');
+            if (!result.success || !result.data) {
+                exportStoryResponse.style.color = 'red';
+                exportStoryResponse.textContent = result.message || 'Export failed.';
+                return;
+            }
+            const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            a.href = url;
+            a.download = `termi-story-export-${stamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            exportStoryResponse.style.color = 'green';
+            exportStoryResponse.textContent = `Exported ${result.data.filesystem.length} item(s).`;
+        });
+    }
+
+    if (importStoryForm) {
+        importStoryForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('import-story-file');
+            const mode = document.getElementById('import-story-mode').value;
+            const includeTheme = document.getElementById('import-include-theme').checked;
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) {
+                importStoryResponse.style.color = 'red';
+                importStoryResponse.textContent = 'Choose a JSON export file first.';
+                return;
+            }
+            if (mode === 'replace') {
+                const ok = confirm('Replace mode deletes ALL story files and folders under / (except the root), then imports the file. This cannot be undone. Continue?');
+                if (!ok) return;
+            }
+            importStoryResponse.style.color = '';
+            importStoryResponse.textContent = 'Importing…';
+            let payload;
+            try {
+                const text = await file.text();
+                payload = JSON.parse(text);
+            } catch (err) {
+                importStoryResponse.style.color = 'red';
+                importStoryResponse.textContent = 'Could not parse JSON file.';
+                return;
+            }
+            const result = await apiRequest('import_story', {
+                data: {
+                    payload,
+                    mode,
+                    include_theme: includeTheme
+                }
+            });
+            if (result.success) {
+                importStoryResponse.style.color = 'green';
+                importStoryResponse.textContent = result.message; // stays visible (may list unmatched owners)
+                if ($('#fs-tree').jstree(true)) {
+                    $('#fs-tree').jstree(true).refresh();
+                }
+                fileInput.value = '';
+            } else {
+                importStoryResponse.style.color = 'red';
+                importStoryResponse.textContent = result.message || 'Import failed.';
+            }
+        });
+    }
+
 
 // Helper functions for path building (Assuming data is flat array with .id and .parent)
 function findNodeInTree(data, id) {

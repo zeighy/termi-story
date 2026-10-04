@@ -16,7 +16,12 @@ $admin = new Admin($db);
 
 $response = ['success' => false];
 
-$input = json_decode(file_get_contents('php://input'), true);
+$rawBody = file_get_contents('php://input');
+if (($rawBody === '' || $rawBody === false) && empty($_POST) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    echo json_encode(['success' => false, 'message' => 'Request too large for the server (post_max_size is ' . ini_get('post_max_size') . '). Raise post_max_size in php.ini and retry.']);
+    exit;
+}
+$input = json_decode($rawBody, true);
 
 if ($input === null) {
     $input = $_POST;
@@ -75,6 +80,16 @@ switch ($action) {
         $settings = $admin->getThemeSettings();
         echo json_encode(['success' => true, 'data' => $settings]);
         exit();
+
+    case 'export_story':
+        $response = $admin->exportStory();
+        break;
+    case 'import_story':
+        $payload = $data['payload'] ?? null;
+        $mode = $data['mode'] ?? 'merge';
+        $includeTheme = !empty($data['include_theme']);
+        $response = $admin->importStory($payload, $mode, $includeTheme);
+        break;
 
     default:
         $response['message'] = 'Invalid action specified.';

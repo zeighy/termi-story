@@ -303,4 +303,329 @@ class Admin {
         }
         return ['success' => true, 'message' => 'Theme updated successfully!'];
     }
+
+    // --- Story Export / Import ---
+
+    public function exportStory() {
+        $this->db->query("SELECT id, username FROM users");
+        $users = $this->db->resultSet();
+        $usersById = [];
+        foreach ($users as $user) {
+            $usersById[(int)$user['id']] = $user['username'];
+        }
+
+        $this->db->query("SELECT * FROM filesystem ORDER BY parent_id, type DESC, name");
+        $items = $this->db->resultSet();
+        $itemsById = [];
+        foreach ($items as $item) {
+            $itemsById[(int)$item['id']] = $item;
+        }
+
+        $paths = [];
+        $buildPath = function ($itemId) use (&$buildPath, &$paths, $itemsById) {
+            if (isset($paths[$itemId])) {
+                return $paths[$itemId];
+            }
+            if (!isset($itemsById[$itemId])) {
+                return null;
+            }
+            $item = $itemsById[$itemId];
+            if ($item['parent_id'] === null) {
+                $paths[$itemId] = '/';
+                return '/';
+            }
+            $parentPath = $buildPath((int)$item['parent_id']);
+            if ($parentPath === null) {
+                return null;
+            }
+            $path = rtrim($parentPath, '/') . '/' . $item['name'];
+            $paths[$itemId] = $path;
+            return $path;
+        };
+
+        $filesystem = [];
+        foreach ($items as $item) {
+            if ((int)$item['id'] === 1) {
+                continue; // root is implied
+            }
+            $path = $buildPath((int)$item['id']);
+            if ($path === null) {
+                continue;
+            }
+            $ownerId = $item['owner_id'] !== null ? (int)$item['owner_id'] : null;
+            $filesystem[] = [
+                'path' => $path,
+                'type' => $item['type'],
+                'content' => $item['content'],
+                'is_hidden' => (bool)$item['is_hidden'],
+                'password_hash' => $item['password'],
+                'password_hint' => $item['password_hint'],
+                'owner_username' => ($ownerId !== null && isset($usersById[$ownerId])) ? $usersById[$ownerId] : null,
+            ];
+        }
+
+        // Stable order: shorter paths first so import creates parents before children
+        usort($filesystem, function ($a, $b) {
+            $da = substr_count($a['path'], '/');
+            $db = substr_count($b['path'], '/');
+            if ($da === $db) {
+                return strcmp($a['path'], $b['path']);
+            }
+            return $da - $db;
+        });
+
+        return [
+            'success' => true,
+            'data' => [
+                'format' => 'termi-story-export',
+                'version' => 1,
+                'exported_at' => gmdate('c'),
+                'theme' => $this->getThemeSettings(),
+                'filesystem' => $filesystem,
+            ],
+        ];
+    }
+
+    public function importStory($payload, $mode = 'merge', $includeTheme = false) {
+        if (!is_array($payload)) {
+            return ['success' => false, 'message' => 'Invalid import payload.'];
+        }
+
+        $format = $payload['format'] ?? '';
+        $version = $payload['version'] ?? null;
+        if ($format !== 'termi-story-export' || (int)$version !== 1) {
+            return ['success' => false, 'message' => 'Unrecognized export format. Expected termi-story-export version 1.'];
+        }
+
+        $filesystem = $payload['filesystem'] ?? null;
+        if (!is_array($filesystem)) {
+            return ['success' => false, 'message' => 'Export is missing a filesystem array.'];
+        }
+
+        $mode = ($mode === 'replace') ? 'replace' : 'merge';
+        $includeTheme = (bool)$includeTheme;
+
+        // Validate entries before mutating
+        $normalized = [];
+        foreach ($filesystem as $index => $entry) {
+            if (!is_array($entry)) {
+                return ['success' => false, 'message' => "Filesystem entry #{$index} is invalid."];
+            }
+            $rawPath = isset($entry['path']) ? trim((string)$entry['path']) : '';
+            $type = $entry['type'] ?? '';
+            if ($rawPath === '' || $rawPath[0] !== '/') {
+                return ['success' => false, 'message' => "Path must be absolute: {$rawPath}"];
+            }
+            // Normalize: backslashes to slashes, collapse repeated slashes, drop trailing slash
+            $segments = array_values(array_filter(explode('/', str_replace('\\', '/', $rawPath)), function ($seg) {
+                return $seg !== '';
+            }));
+            if (empty($segments)) {
+                return ['success' => false, 'message' => "Filesystem entry #{$index} has an invalid path."];
+            }
+            foreach ($segments as $seg) {
+                if ($seg === '.' || $seg === '..') {
+                    return ['success' => false, 'message' => "Invalid path segment in: {$rawPath}"];
+                }
+            }
+            $path = '/' . implode('/', $segments);
+            if (!is_string($type) || !in_array($type, ['dir', 'txt', 'app', 'img'], true)) {
+                return ['success' => false, 'message' => "Unsupported type for {$path}."];
+            }
+            foreach (['content', 'password_hash', 'password_hint', 'owner_username'] as $field) {
+                if (isset($entry[$field]) && !is_string($entry[$field])) {
+                    return ['success' => false, 'message' => "Field '{$field}' must be a string for {$path}."];
+                }
+            }
+            $normalized[] = [
+                'path' => $path,
+                'type' => $type,
+                'content' => array_key_exists('content', $entry) ? $entry['content'] : null,
+                'is_hidden' => !empty($entry['is_hidden']) ? 1 : 0,
+                'password_hash' => $entry['password_hash'] ?? null,
+                'password_hint' => $entry['password_hint'] ?? null,
+                'owner_username' => $entry['owner_username'] ?? null,
+                'depth' => count($segments),
+            ];
+        }
+
+        usort($normalized, function ($a, $b) {
+            if ($a['depth'] === $b['depth']) {
+                return strcmp($a['path'], $b['path']);
+            }
+            return $a['depth'] - $b['depth'];
+        });
+
+        $this->db->query("SELECT id, username FROM users");
+        $usersByName = [];
+        foreach ($this->db->resultSet() as $user) {
+            $usersByName[$user['username']] = (int)$user['id'];
+        }
+
+        try {
+            $this->db->beginTransaction();
+
+            if ($mode === 'replace') {
+                // Children first: delete everything except root
+                $this->db->query("DELETE FROM filesystem WHERE id <> 1");
+                $this->db->execute();
+            }
+
+            // Rebuild path map from current DB state
+            $pathToId = $this->buildPathToIdMap();
+
+            $created = 0;
+            $updated = 0;
+            $skippedOwners = 0;
+
+            foreach ($normalized as $entry) {
+                $path = $entry['path'];
+                $pathKey = strtolower($path);
+                $parentPath = dirname($path);
+                $parentKey = strtolower($parentPath);
+
+                if (!isset($pathToId[$parentKey])) {
+                    throw new Exception("Missing parent directory for {$path}. Ensure parent folders are included in the export.");
+                }
+                $parentId = $pathToId[$parentKey];
+                $name = basename($path);
+
+                $ownerId = null;
+                $ownerUnknown = false;
+                if (!empty($entry['owner_username'])) {
+                    if (isset($usersByName[$entry['owner_username']])) {
+                        $ownerId = $usersByName[$entry['owner_username']];
+                    } else {
+                        $skippedOwners++;
+                        $ownerUnknown = true;
+                    }
+                }
+
+                $content = ($entry['type'] === 'dir') ? null : $entry['content'];
+                $password = !empty($entry['password_hash']) ? $entry['password_hash'] : null;
+                $hint = !empty($entry['password_hint']) ? $entry['password_hint'] : null;
+
+                if (isset($pathToId[$pathKey])) {
+                    $id = $pathToId[$pathKey];
+                    $existing = $this->getItem($id);
+                    if (!$existing) {
+                        throw new Exception("Expected existing item missing for {$path}.");
+                    }
+                    if ($existing['type'] !== $entry['type']) {
+                        throw new Exception("Type mismatch for {$path}: existing is {$existing['type']}, import is {$entry['type']}.");
+                    }
+                    // Unknown owner username: keep the existing local owner rather than clearing it
+                    if ($ownerUnknown) {
+                        $ownerId = $existing['owner_id'] !== null ? (int)$existing['owner_id'] : null;
+                    }
+                    $this->db->query("UPDATE filesystem SET
+                            content = :content,
+                            password = :password,
+                            password_hint = :password_hint,
+                            is_hidden = :is_hidden,
+                            owner_id = :owner_id
+                        WHERE id = :id");
+                    $this->db->bind(':content', $content);
+                    $this->db->bind(':password', $password);
+                    $this->db->bind(':password_hint', $hint);
+                    $this->db->bind(':is_hidden', $entry['is_hidden']);
+                    $this->db->bind(':owner_id', $ownerId);
+                    $this->db->bind(':id', $id);
+                    $this->db->execute();
+                    $updated++;
+                    continue;
+                }
+
+                $this->db->query("INSERT INTO filesystem (parent_id, name, type, content, password, password_hint, is_hidden, owner_id)
+                    VALUES (:parent_id, :name, :type, :content, :password, :password_hint, :is_hidden, :owner_id)");
+                $this->db->bind(':parent_id', $parentId);
+                $this->db->bind(':name', $name);
+                $this->db->bind(':type', $entry['type']);
+                $this->db->bind(':content', $content);
+                $this->db->bind(':password', $password);
+                $this->db->bind(':password_hint', $hint);
+                $this->db->bind(':is_hidden', $entry['is_hidden']);
+                $this->db->bind(':owner_id', $ownerId);
+                $this->db->execute();
+                $newId = (int)$this->db->lastInsertId();
+                $pathToId[$pathKey] = $newId;
+                $created++;
+            }
+
+            if ($includeTheme && isset($payload['theme']) && is_array($payload['theme'])) {
+                $allowed = [
+                    'background_color', 'text_color', 'prompt_color_user', 'prompt_color_path',
+                    'terminal_title', 'login_greeting', 'motd'
+                ];
+                $themeData = [];
+                foreach ($allowed as $key) {
+                    if (array_key_exists($key, $payload['theme'])) {
+                        $themeData[$key] = $payload['theme'][$key];
+                    }
+                }
+                if (!empty($themeData)) {
+                    $this->updateThemeSettings($themeData);
+                }
+            }
+
+            $this->db->commit();
+
+            $message = "Import complete ({$mode}): {$created} created, {$updated} updated.";
+            if ($skippedOwners > 0) {
+                $message .= " {$skippedOwners} owner username(s) not found locally (new items are All Users; existing items kept their current owner).";
+            }
+            return [
+                'success' => true,
+                'message' => $message,
+                'created' => $created,
+                'updated' => $updated,
+            ];
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            return ['success' => false, 'message' => 'Import failed: ' . $e->getMessage()];
+        }
+    }
+
+    private function buildPathToIdMap() {
+        $this->db->query("SELECT id, parent_id, name FROM filesystem");
+        $items = $this->db->resultSet();
+        $itemsById = [];
+        foreach ($items as $item) {
+            $itemsById[(int)$item['id']] = $item;
+        }
+
+        $paths = [];
+        $build = function ($itemId) use (&$build, &$paths, $itemsById) {
+            if (isset($paths[$itemId])) {
+                return $paths[$itemId];
+            }
+            if (!isset($itemsById[$itemId])) {
+                return null;
+            }
+            $item = $itemsById[$itemId];
+            if ($item['parent_id'] === null) {
+                $paths[$itemId] = '/';
+                return '/';
+            }
+            $parentPath = $build((int)$item['parent_id']);
+            if ($parentPath === null) {
+                return null;
+            }
+            $path = rtrim($parentPath, '/') . '/' . $item['name'];
+            $paths[$itemId] = $path;
+            return $path;
+        };
+
+        $map = [];
+        foreach ($itemsById as $id => $item) {
+            $path = $build($id);
+            if ($path !== null) {
+                $map[strtolower($path)] = $id; // DB collation is case-insensitive
+            }
+        }
+        return $map;
+    }
+
 }
