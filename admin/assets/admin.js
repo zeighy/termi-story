@@ -868,13 +868,17 @@ function triggerDelete(id, name) {
                     include_theme: includeTheme
                 }
             });
-            handleFormResponse(result, importStoryResponse, () => {
-                // Refresh filesystem tree after successful import
+            if (result.success) {
+                importStoryResponse.style.color = 'green';
+                importStoryResponse.textContent = result.message; // stays visible (may list unmatched owners)
                 if ($('#fs-tree').jstree(true)) {
                     $('#fs-tree').jstree(true).refresh();
                 }
                 fileInput.value = '';
-            });
+            } else {
+                importStoryResponse.style.color = 'red';
+                importStoryResponse.textContent = result.message || 'Import failed.';
+            }
         });
     }
 

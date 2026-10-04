@@ -411,20 +411,31 @@ class Admin {
             if (!is_array($entry)) {
                 return ['success' => false, 'message' => "Filesystem entry #{$index} is invalid."];
             }
-            $path = isset($entry['path']) ? trim((string)$entry['path']) : '';
+            $rawPath = isset($entry['path']) ? trim((string)$entry['path']) : '';
             $type = $entry['type'] ?? '';
-            if ($path === '' || $path === '/') {
+            if ($rawPath === '' || $rawPath[0] !== '/') {
+                return ['success' => false, 'message' => "Path must be absolute: {$rawPath}"];
+            }
+            // Normalize: backslashes to slashes, collapse repeated slashes, drop trailing slash
+            $segments = array_values(array_filter(explode('/', str_replace('\\', '/', $rawPath)), function ($seg) {
+                return $seg !== '';
+            }));
+            if (empty($segments)) {
                 return ['success' => false, 'message' => "Filesystem entry #{$index} has an invalid path."];
             }
-            if ($path[0] !== '/') {
-                return ['success' => false, 'message' => "Path must be absolute: {$path}"];
+            foreach ($segments as $seg) {
+                if ($seg === '.' || $seg === '..') {
+                    return ['success' => false, 'message' => "Invalid path segment in: {$rawPath}"];
+                }
             }
-            if (!in_array($type, ['dir', 'txt', 'app', 'img'], true)) {
-                return ['success' => false, 'message' => "Unsupported type '{$type}' for {$path}."];
+            $path = '/' . implode('/', $segments);
+            if (!is_string($type) || !in_array($type, ['dir', 'txt', 'app', 'img'], true)) {
+                return ['success' => false, 'message' => "Unsupported type for {$path}."];
             }
-            $name = basename($path);
-            if ($name === '' || $name === '.' || $name === '..') {
-                return ['success' => false, 'message' => "Invalid name derived from path: {$path}"];
+            foreach (['content', 'password_hash', 'password_hint', 'owner_username'] as $field) {
+                if (isset($entry[$field]) && !is_string($entry[$field])) {
+                    return ['success' => false, 'message' => "Field '{$field}' must be a string for {$path}."];
+                }
             }
             $normalized[] = [
                 'path' => $path,
@@ -434,7 +445,7 @@ class Admin {
                 'password_hash' => $entry['password_hash'] ?? null,
                 'password_hint' => $entry['password_hint'] ?? null,
                 'owner_username' => $entry['owner_username'] ?? null,
-                'depth' => substr_count($path, '/'),
+                'depth' => count($segments),
             ];
         }
 
@@ -469,30 +480,24 @@ class Admin {
 
             foreach ($normalized as $entry) {
                 $path = $entry['path'];
+                $pathKey = strtolower($path);
                 $parentPath = dirname($path);
-                if ($parentPath === '\\' || $parentPath === '.') {
-                    $parentPath = '/';
-                }
-                // Normalize dirname of /foo -> /
-                if ($parentPath !== '/') {
-                    $parentPath = rtrim(str_replace('\\', '/', $parentPath), '/');
-                    if ($parentPath === '') {
-                        $parentPath = '/';
-                    }
-                }
+                $parentKey = strtolower($parentPath);
 
-                if (!isset($pathToId[$parentPath])) {
+                if (!isset($pathToId[$parentKey])) {
                     throw new Exception("Missing parent directory for {$path}. Ensure parent folders are included in the export.");
                 }
-                $parentId = $pathToId[$parentPath];
+                $parentId = $pathToId[$parentKey];
                 $name = basename($path);
 
                 $ownerId = null;
+                $ownerUnknown = false;
                 if (!empty($entry['owner_username'])) {
                     if (isset($usersByName[$entry['owner_username']])) {
                         $ownerId = $usersByName[$entry['owner_username']];
                     } else {
                         $skippedOwners++;
+                        $ownerUnknown = true;
                     }
                 }
 
@@ -500,14 +505,18 @@ class Admin {
                 $password = !empty($entry['password_hash']) ? $entry['password_hash'] : null;
                 $hint = !empty($entry['password_hint']) ? $entry['password_hint'] : null;
 
-                if (isset($pathToId[$path])) {
-                    $id = $pathToId[$path];
+                if (isset($pathToId[$pathKey])) {
+                    $id = $pathToId[$pathKey];
                     $existing = $this->getItem($id);
                     if (!$existing) {
                         throw new Exception("Expected existing item missing for {$path}.");
                     }
                     if ($existing['type'] !== $entry['type']) {
                         throw new Exception("Type mismatch for {$path}: existing is {$existing['type']}, import is {$entry['type']}.");
+                    }
+                    // Unknown owner username: keep the existing local owner rather than clearing it
+                    if ($ownerUnknown) {
+                        $ownerId = $existing['owner_id'] !== null ? (int)$existing['owner_id'] : null;
                     }
                     $this->db->query("UPDATE filesystem SET
                             content = :content,
@@ -539,7 +548,7 @@ class Admin {
                 $this->db->bind(':owner_id', $ownerId);
                 $this->db->execute();
                 $newId = (int)$this->db->lastInsertId();
-                $pathToId[$path] = $newId;
+                $pathToId[$pathKey] = $newId;
                 $created++;
             }
 
@@ -563,7 +572,7 @@ class Admin {
 
             $message = "Import complete ({$mode}): {$created} created, {$updated} updated.";
             if ($skippedOwners > 0) {
-                $message .= " {$skippedOwners} owner username(s) not found locally and were left as All Users.";
+                $message .= " {$skippedOwners} owner username(s) not found locally (new items are All Users; existing items kept their current owner).";
             }
             return [
                 'success' => true,
@@ -571,8 +580,10 @@ class Admin {
                 'created' => $created,
                 'updated' => $updated,
             ];
-        } catch (Exception $e) {
-            $this->db->rollBack();
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
             return ['success' => false, 'message' => 'Import failed: ' . $e->getMessage()];
         }
     }
@@ -611,7 +622,7 @@ class Admin {
         foreach ($itemsById as $id => $item) {
             $path = $build($id);
             if ($path !== null) {
-                $map[$path] = $id;
+                $map[strtolower($path)] = $id; // DB collation is case-insensitive
             }
         }
         return $map;

@@ -69,6 +69,10 @@ class Database {
         return $this->dbh->beginTransaction();
     }
 
+    public function inTransaction() {
+        return $this->dbh->inTransaction();
+    }
+
     public function commit() {
         return $this->dbh->commit();
     }
