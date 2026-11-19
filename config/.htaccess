@@ -1,0 +1,8 @@
+# Deny all web access to this directory. Only PHP includes and the CLI should read it.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

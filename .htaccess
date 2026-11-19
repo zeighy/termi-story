@@ -1,0 +1,11 @@
+# Defense in depth for a misconfigured web root (Apache). The recommended setup is
+# to point the document root at /public, in which case this file is never read.
+
+<IfModule mod_alias.c>
+    # Hidden files and directories (.git, .env, .htaccess, ...)
+    RedirectMatch 404 /\.(?!well-known/)
+    # Server-side code, configuration and test tooling
+    RedirectMatch 404 /(config|src|verification)(/|$)
+    # Schema and docs
+    RedirectMatch 404 /(dbsetup\.txt|README\.md|LICENSE)$
+</IfModule>

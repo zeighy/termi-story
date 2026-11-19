@@ -30,16 +30,19 @@ $(function () {
     // ============================
     // API HELPER
     // ============================
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
     async function apiRequest(action, body) {
         try {
             const response = await fetch('api_admin.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
                 body: JSON.stringify({ action, ...body })
             });
-            if (action === 'get_fs_tree') {
-                return await response.json();
-            }
             return await response.json();
         } catch (error) {
             console.error('API Request Error:', error);
@@ -111,13 +114,11 @@ $(function () {
         renderMainView('1');
     }).jstree({
         'core': {
-            'data': {
-                'url': 'api_admin.php',
-                'type': 'POST',
-                'dataType': 'json',
-                'data': function (node) {
-                    return { 'action': 'get_fs_tree' };
-                }
+            // Load through apiRequest so the tree request carries the JSON body and CSRF header
+            'data': function (node, callback) {
+                apiRequest('get_fs_tree').then((result) => {
+                    callback.call(this, Array.isArray(result) ? result : []);
+                });
             },
             'check_callback': true,
             'themes': {
@@ -142,7 +143,7 @@ $(function () {
                     'delete': {
                         'label': 'Delete',
                         'action': function () {
-                            triggerDelete(node.id, node.text);
+                            triggerDelete(node.id, nodeName(node));
                         }
                     }
                 };
@@ -159,13 +160,13 @@ $(function () {
         const node = data.node;
         if (node.type === 'dir') {
             parentIdInput.value = node.id;
-            selectedDirName.textContent = node.text;
+            selectedDirName.textContent = nodeName(node);
             renderMainView(node.id); // Call render on directory select
         } else {
             // If a file is selected, set the parent to the file's parent
             parentIdInput.value = node.parent;
             const parentNode = $('#fs-tree').jstree(true).get_node(node.parent);
-            selectedDirName.textContent = parentNode ? parentNode.text : '/';
+            selectedDirName.textContent = parentNode ? nodeName(parentNode) : '/';
             renderMainView(node.parent); // Render parent dir if file selected
         }
 
@@ -181,7 +182,7 @@ $(function () {
             const type = this.value;
             addContentWrapper.style.display = (type === 'txt' || type === 'app') ? 'block' : 'none';
             document.getElementById('image-upload-wrapper').style.display = (type === 'img') ? 'block' : 'none';
-            addPasswordWrapper.style.display = (type === 'txt' || type === 'img') ? 'block' : 'none';
+            addPasswordWrapper.style.display = 'block'; // any item type can be locked
         });
 
         addItemForm.addEventListener('submit', async function (e) {
@@ -191,6 +192,7 @@ $(function () {
             const response = await apiRequest('add_item', { data: data });
             handleFormResponse(response, addFormResponse, () => {
                 $('#fs-tree').jstree(true).refresh();
+                renderMainView(currentDirectoryId); // show the new item in the grid
                 addItemForm.reset();
                 const addPreview = document.getElementById('image-preview');
                 if (addPreview) addPreview.style.display = 'none';
@@ -204,7 +206,7 @@ $(function () {
 
     async function openEditModal(id) {
         const item = await apiRequest('get_item', { id: id });
-        if (!item) {
+        if (!item || item.success === false) {
             alert('Could not fetch item details.');
             return;
         }
@@ -215,13 +217,29 @@ $(function () {
         const isDir = item.type === 'dir';
         document.getElementById('edit-content-wrapper').style.display = (item.type === 'txt' || item.type === 'app') ? 'block' : 'none';
         document.getElementById('edit-image-upload-wrapper').style.display = (item.type === 'img') ? 'block' : 'none';
-        document.getElementById('edit-password-wrapper').style.display = (item.type === 'txt' || item.type === 'img') ? 'block' : 'none';
+        // Any item type can be locked. Show the current lock state and keep its hint.
+        document.getElementById('edit-password-wrapper').style.display = 'block';
+        document.getElementById('edit-item-password').value = '';
+        document.getElementById('edit-item-hint').value = item.password_hint || '';
+        document.getElementById('edit-remove-password').checked = false;
+        document.getElementById('edit-lock-status').style.display = item.has_password ? 'block' : 'none';
+        document.getElementById('edit-remove-lock-label').style.display = item.has_password ? 'flex' : 'none';
 
         if (!isDir) {
             document.getElementById('edit-item-content').value = item.content || '';
         }
         document.getElementById('edit-is-hidden').checked = item.is_hidden == 1;
-        document.getElementById('edit-item-owner').value = item.owner_id ? item.owner_id : 'null';
+        // If the owner account no longer exists, say so instead of silently showing
+        // "All Users" (saving would then quietly make the item public).
+        const ownerSelect = document.getElementById('edit-item-owner');
+        ownerSelect.querySelectorAll('option[data-orphan]').forEach(o => o.remove());
+        const ownerValue = item.owner_id ? String(item.owner_id) : 'null';
+        if (![...ownerSelect.options].some(o => o.value === ownerValue)) {
+            const orphan = new Option(`(deleted user #${ownerValue}) - choose a new owner`, ownerValue);
+            orphan.dataset.orphan = '1';
+            ownerSelect.add(orphan);
+        }
+        ownerSelect.value = ownerValue;
 
         modal.style.display = 'flex';
     }
@@ -245,6 +263,7 @@ $(function () {
         const response = await apiRequest('update_item', { data: data });
         handleFormResponse(response, editFormResponse, () => {
             $('#fs-tree').jstree(true).refresh();
+            renderMainView(currentDirectoryId); // reflect renames in the grid
             closeEditModal();
         });
     });
@@ -307,11 +326,12 @@ $(function () {
                     <td>${escapeHtml(user.username)}</td>
                     <td>
                         <button class="edit-user-btn" data-userid="${user.id}" data-username="${escapeHtml(user.username)}">Edit</button>
-                        <button class="delete-user-btn" data-userid="${user.id}">Delete</button>
+                        <button class="delete-user-btn" data-userid="${user.id}" data-username="${escapeHtml(user.username)}">Delete</button>
                     </td>
                 `;
                 usersTableBody.appendChild(tr);
             });
+            loadUserDropdowns(); // keep the add/edit item owner lists in sync
         }
     }
 
@@ -328,15 +348,119 @@ $(function () {
         }
 
         if (e.target.classList.contains('delete-user-btn')) {
-            const id = e.target.dataset.userid;
-            if (confirm('Are you sure you want to delete this user? This is permanent.')) {
-                const response = await apiRequest('delete_user', { id: id });
-                if(response.success) {
-                    loadUsers();
-                } else {
-                    alert(response.message);
-                }
+            openDeleteUserModal(e.target.dataset.userid, e.target.dataset.username);
+        }
+    });
+
+    // ============================
+    // DELETE USER (with ownership transfer)
+    // ============================
+    // A user who owns files/directories can only be deleted after the admin decides
+    // where those items go: another user, or all users. Confirm stays disabled until then.
+    const deleteUserModal = document.getElementById('delete-user-modal');
+    const deleteUserForm = document.getElementById('delete-user-form');
+    const deleteUserName = document.getElementById('delete-user-name');
+    const deleteUserSummary = document.getElementById('delete-user-summary');
+    const deleteUserItems = document.getElementById('delete-user-items');
+    const deleteUserChoices = document.getElementById('delete-user-choices');
+    const transferModeUser = document.getElementById('transfer-mode-user');
+    const transferModeAll = document.getElementById('transfer-mode-all');
+    const transferToSelect = document.getElementById('delete-user-transfer-to');
+    const noOtherUsersNote = document.getElementById('delete-user-no-others');
+    const confirmDeleteUserBtn = document.getElementById('confirm-delete-user-btn');
+    const deleteUserResponse = document.getElementById('delete-user-response');
+    let deleteUserId = null;
+    let deleteUserNeedsChoice = false;
+
+    // The admin's decision: a user ID, 'all', or null while undecided
+    function selectedTransfer() {
+        if (transferModeAll.checked) return 'all';
+        if (transferModeUser.checked) return transferToSelect.value || null;
+        return null;
+    }
+
+    function updateDeleteUserState() {
+        transferToSelect.disabled = !transferModeUser.checked;
+        confirmDeleteUserBtn.disabled = deleteUserNeedsChoice && selectedTransfer() === null;
+    }
+
+    function closeDeleteUserModal() {
+        deleteUserModal.style.display = 'none';
+        deleteUserId = null;
+    }
+
+    async function openDeleteUserModal(id, username) {
+        deleteUserForm.reset();
+        deleteUserResponse.textContent = '';
+        deleteUserItems.innerHTML = '';
+        confirmDeleteUserBtn.disabled = true;
+
+        const [ownership, users] = await Promise.all([
+            apiRequest('get_user_ownership', { id: id }),
+            apiRequest('get_users')
+        ]);
+        if (!ownership.success) {
+            alert(ownership.message || 'Could not load this user.');
+            return;
+        }
+
+        deleteUserId = id;
+        deleteUserName.textContent = username;
+        const count = ownership.data.count;
+        deleteUserNeedsChoice = count > 0;
+
+        // Other users the files can be transferred to
+        const others = users.success ? users.data.filter(u => String(u.id) !== String(id)) : [];
+        transferToSelect.innerHTML = '';
+        transferToSelect.add(new Option('Select a user…', ''));
+        others.forEach(u => transferToSelect.add(new Option(u.username, u.id)));
+        transferModeUser.disabled = others.length === 0;
+        noOtherUsersNote.style.display = others.length === 0 ? 'block' : 'none';
+
+        if (count === 0) {
+            deleteUserSummary.textContent = `${username} doesn't own any files or directories.`;
+            deleteUserChoices.style.display = 'none';
+        } else {
+            deleteUserSummary.textContent = `${username} owns ${count} item${count === 1 ? '' : 's'}:`;
+            ownership.data.items.forEach(path => {
+                const li = document.createElement('li');
+                li.textContent = path;
+                deleteUserItems.appendChild(li);
+            });
+            if (count > ownership.data.items.length) {
+                const li = document.createElement('li');
+                li.textContent = `…and ${count - ownership.data.items.length} more`;
+                deleteUserItems.appendChild(li);
             }
+            deleteUserChoices.style.display = 'block';
+        }
+
+        updateDeleteUserState();
+        deleteUserModal.style.display = 'flex';
+    }
+
+    [transferModeUser, transferModeAll, transferToSelect].forEach(el => el.addEventListener('change', updateDeleteUserState));
+    document.getElementById('cancel-delete-user-btn').addEventListener('click', closeDeleteUserModal);
+
+    deleteUserForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const transferTo = selectedTransfer();
+        if (deleteUserId === null || (deleteUserNeedsChoice && transferTo === null)) {
+            return; // no decision yet
+        }
+        confirmDeleteUserBtn.disabled = true;
+        const data = transferTo !== null ? { transfer_to: transferTo } : {};
+        const response = await apiRequest('delete_user', { id: deleteUserId, data: data });
+        if (response.success) {
+            closeDeleteUserModal();
+            userFormResponse.style.color = 'green';
+            userFormResponse.textContent = response.message;
+            setTimeout(() => { userFormResponse.textContent = ''; }, 4000);
+            loadUsers();
+        } else {
+            deleteUserResponse.style.color = 'red';
+            deleteUserResponse.textContent = response.message || 'Could not delete the user.';
+            updateDeleteUserState();
         }
     });
 
@@ -500,8 +624,10 @@ $(function () {
 
 let selectedFileId = null;
 let selectedFileName = null;
+let currentDirectoryId = '1'; // directory shown in the main view
 
 async function renderMainView(directoryId) {
+    currentDirectoryId = String(directoryId);
     const mainView = document.getElementById('fs-main-view');
     const currentPathEl = document.getElementById('fs-current-path');
 
@@ -538,10 +664,10 @@ async function renderMainView(directoryId) {
                     const itemEl = document.createElement('div');
                     itemEl.className = 'fs-item ' + (isDir ? 'dir' : 'file');
                     itemEl.dataset.id = item.id;
-                    itemEl.dataset.name = item.text;
+                    itemEl.dataset.name = nodeName(item);
                     itemEl.innerHTML = `
                         <div class="fs-item-icon">${iconChar}</div>
-                        <div class="fs-item-name">${escapeHtml(item.text)}</div>
+                        <div class="fs-item-name">${escapeHtml(nodeName(item))}</div>
                     `;
 
                     itemEl.addEventListener('click', (e) => {
@@ -555,7 +681,7 @@ async function renderMainView(directoryId) {
 
                         itemEl.classList.add('selected');
                         selectedFileId = item.id;
-                        selectedFileName = item.text;
+                        selectedFileName = nodeName(item);
 
                         document.getElementById('fs-main-actions').style.display = 'flex';
                     });
@@ -661,7 +787,7 @@ document.getElementById('main-move-btn').addEventListener('click', async (e) => 
         });
 
         function sortNodes(nodes) {
-            nodes.sort((a, b) => a.text.localeCompare(b.text));
+            nodes.sort((a, b) => nodeName(a).localeCompare(nodeName(b)));
             nodes.forEach(node => {
                 if (node.children.length > 0) {
                     sortNodes(node.children);
@@ -676,7 +802,7 @@ document.getElementById('main-move-btn').addEventListener('click', async (e) => 
                     const option = document.createElement('option');
                     option.value = node.id;
                     const prefix = '> '.repeat(level);
-                    option.textContent = prefix + (node.id.toString() === '1' && node.text === '/' ? '/' : node.text);
+                    option.textContent = prefix + nodeName(node);
                     select.appendChild(option);
                 }
                 populateSelect(node.children, level + 1);
@@ -715,7 +841,7 @@ if (moveForm) {
 
 async function triggerPreview(id) {
     const item = await apiRequest('get_item', { id: id });
-    if (!item) {
+    if (!item || item.success === false) {
         alert('Could not fetch item details.');
         return;
     }
@@ -733,7 +859,7 @@ async function triggerPreview(id) {
         if (parts.length >= 2) {
             const width = parseInt(parts[0], 10);
             const pixelData = parts[1];
-            if (!isNaN(width) && width > 0) {
+            if (!isNaN(width) && width > 0 && width <= 4096 && pixelData.length / width <= 4096) {
                 const height = Math.ceil(pixelData.length / width);
 
                 // Clear content and append canvas
@@ -772,7 +898,12 @@ async function triggerPreview(id) {
             previewContent.innerHTML = `<em>[Invalid Image Format]</em>`;
         }
     } else {
-        previewContent.innerText = item.content || '<em>[Empty File]</em>';
+        // Content arrives decoded (plain text) from get_item, so show it as text
+        if (item.content) {
+            previewContent.innerText = item.content;
+        } else {
+            previewContent.innerHTML = '<em>[Empty File]</em>';
+        }
     }
 
     previewEditBtn.onclick = () => {
@@ -884,6 +1015,16 @@ function triggerDelete(id, name) {
 
 
 // Helper functions for path building (Assuming data is flat array with .id and .parent)
+
+// A tree item's plain-text name. 'text' is HTML-escaped for jstree, so display code
+// (textContent, escapeHtml, confirm dialogs) must use the raw name in data.name.
+function nodeName(node) {
+    if (node && node.data && typeof node.data.name === 'string') {
+        return node.data.name;
+    }
+    return node ? String(node.text ?? '') : '';
+}
+
 function findNodeInTree(data, id) {
     return data.find(item => item.id.toString() === id.toString());
 }
@@ -891,8 +1032,9 @@ function findNodeInTree(data, id) {
 function buildPath(data, id) {
     let path = [];
     let current = findNodeInTree(data, id);
-    while (current && current.id !== '#') {
-        path.unshift(current.text);
+    // Stop at the root (parent '#'); its own name is the leading '/'
+    while (current && current.id !== '#' && current.parent !== '#') {
+        path.unshift(nodeName(current));
         current = findNodeInTree(data, current.parent);
     }
     return '/' + path.join('/');

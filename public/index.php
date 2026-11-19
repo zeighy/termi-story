@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once '../src/Security.php';
+Security::startSession(Security::PLAYER_SESSION_NAME);
+Security::sendSecurityHeaders(true);
 
 // Fetch theme settings from the database
 require_once '../config/database.php';
@@ -21,10 +23,10 @@ foreach ($themeResults as $row) {
     <link rel="stylesheet" href="terminal.css">
     <style>
         :root {
-            --background-color: <?php echo htmlspecialchars($theme['background_color'] ?? '#1a1a1a'); ?>;
-            --text-color: <?php echo htmlspecialchars($theme['text_color'] ?? '#00ff00'); ?>;
-            --prompt-user-color: <?php echo htmlspecialchars($theme['prompt_color_user'] ?? '#50fa7b'); ?>;
-            --prompt-path-color: <?php echo htmlspecialchars($theme['prompt_color_path'] ?? '#bd93f9'); ?>;
+            --background-color: <?php echo Security::safeColor($theme['background_color'] ?? null, '#1a1a1a'); ?>;
+            --text-color: <?php echo Security::safeColor($theme['text_color'] ?? null, '#00ff00'); ?>;
+            --prompt-user-color: <?php echo Security::safeColor($theme['prompt_color_user'] ?? null, '#50fa7b'); ?>;
+            --prompt-path-color: <?php echo Security::safeColor($theme['prompt_color_path'] ?? null, '#bd93f9'); ?>;
         }
     </style>
 </head>
@@ -42,9 +44,10 @@ foreach ($themeResults as $row) {
         </div>
     </div>
     <script>
-        // Pass the MOTD to JavaScript
-        const motd = `<?php echo addslashes($theme['motd'] ?? ''); ?>`;
-        const loginGreeting = `<?php echo addslashes($theme['login_greeting'] ?? 'Welcome.'); ?>`;
+        // Pass the MOTD to JavaScript. json_encode with the HEX flags yields a JS string
+        // literal that cannot break out of the string or the <script> element.
+        const motd = <?php echo json_encode((string)($theme['motd'] ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+        const loginGreeting = <?php echo json_encode((string)($theme['login_greeting'] ?? 'Welcome.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     </script>
     <script src="terminal.js"></script>
 </body>

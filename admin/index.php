@@ -1,10 +1,13 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/Security.php';
+Security::startSession(Security::ADMIN_SESSION_NAME);
+Security::sendSecurityHeaders(false);
 
 if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !== true) {
     header('Location: login.php');
     exit;
 }
+$csrfToken = Security::csrfToken();
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../src/Database.php';
@@ -22,15 +25,16 @@ foreach ($themeResults as $row) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($csrfToken); ?>">
     <title>Admin Panel - Filesystem</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" integrity="sha384-5BJyHQxjYGbDVZGcamhOsAONslKY8cIDK03gh3J/mgzCI10yZgJVPrr9pwXkzBAU" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="assets/admin.css">
     <style>
         :root {
-            --theme-bg-color: <?php echo htmlspecialchars($theme['background_color'] ?? '#1a1a1a'); ?>;
-            --theme-text-color: <?php echo htmlspecialchars($theme['text_color'] ?? '#00ff00'); ?>;
-            --theme-prompt-user-color: <?php echo htmlspecialchars($theme['prompt_color_user'] ?? '#50fa7b'); ?>;
-            --theme-prompt-path-color: <?php echo htmlspecialchars($theme['prompt_color_path'] ?? '#bd93f9'); ?>;
+            --theme-bg-color: <?php echo Security::safeColor($theme['background_color'] ?? null, '#1a1a1a'); ?>;
+            --theme-text-color: <?php echo Security::safeColor($theme['text_color'] ?? null, '#00ff00'); ?>;
+            --theme-prompt-user-color: <?php echo Security::safeColor($theme['prompt_color_user'] ?? null, '#50fa7b'); ?>;
+            --theme-prompt-path-color: <?php echo Security::safeColor($theme['prompt_color_path'] ?? null, '#bd93f9'); ?>;
         }
     </style>
 </head>
@@ -42,7 +46,10 @@ foreach ($themeResults as $row) {
             <button class="tab-link" data-tab="users">Users</button>
             <button class="tab-link" data-tab="theme">Theme</button>
             <button class="tab-link" data-tab="story">Story</button>
-            <a href="logout.php" class="logout-link">Logout</a>
+            <form action="logout.php" method="post" class="logout-form">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <button type="submit" class="logout-link">Logout</button>
+            </form>
         </div>
     </div>
 
@@ -55,6 +62,8 @@ foreach ($themeResults as $row) {
                     <li><b>File Tree:</b> The tree on the left displays the current file and folder structure.</li>
                     <li><b>Actions:</b> To <strong>Edit</strong> or <strong>Delete</strong> an item, right-click on it in the tree to open the context menu.</li>
                     <li><b>Adding Items:</b> To add a new file or directory, first click on the parent directory in the tree where you want to add it. Then, fill out the "Add New Item" form on the right.</li>
+                    <li><b>Names:</b> Players type names as single words, so names can't contain spaces or slashes (use <code>_</code> or <code>-</code> instead).</li>
+                    <li><b>Locks:</b> Any item can have a lock password. Players must <code>unlock</code> it before reading a file, entering a directory, or running an app. Changing the password locks it again for players who had unlocked it.</li>
                 </ul>
             </div>
             <div class="help-tab" data-tab="users" style="display: none;">
@@ -62,6 +71,7 @@ foreach ($themeResults as $row) {
                 <ul>
                     <li><b>Add User:</b> Use the form to create a new user.</li>
                     <li><b>Edit/Delete:</b> Use the buttons in the table row. Leaving password blank keeps the current one.</li>
+                    <li><b>Deleting a user who owns files:</b> you must first choose to transfer their files and directories to another user or make them available to all users.</li>
                 </ul>
             </div>
             <div class="help-tab" data-tab="theme" style="display: none;">
@@ -139,9 +149,10 @@ foreach ($themeResults as $row) {
                         <textarea id="item-content" name="content" rows="8"></textarea>
                     </div>
 
-                    <div id="password-wrapper" style="display: none;">
-                         <label for="item-password">Password (optional):</label>
+                    <div id="password-wrapper">
+                         <label for="item-password">Lock password (optional):</label>
                          <input type="text" id="item-password" name="password">
+                         <small>Players must <code>unlock</code> it first: to read a file, <code>cd</code> into a directory, or <code>run</code> an app.</small>
                          <label for="item-hint">Hint (optional):</label>
                          <input type="text" id="item-hint" name="password_hint">
                     </div>
@@ -311,10 +322,14 @@ foreach ($themeResults as $row) {
                 </div>
                 
                 <div id="edit-password-wrapper">
-                     <label for="edit-item-password">Password (optional):</label>
+                     <p id="edit-lock-status" style="display: none; margin: 10px 0 0;"><strong>Locked.</strong> Leave the password blank to keep the current one.</p>
+                     <label for="edit-item-password">Lock password (optional):</label>
                      <input type="text" id="edit-item-password" name="password">
                      <label for="edit-item-hint">Hint (optional):</label>
                      <input type="text" id="edit-item-hint" name="password_hint">
+                     <label class="checkbox-label" id="edit-remove-lock-label" style="display: none;">
+                         <input type="checkbox" id="edit-remove-password" name="remove_password" value="1"> Remove lock
+                     </label>
                 </div>
 
                 <label class="checkbox-label">
@@ -355,8 +370,39 @@ foreach ($themeResults as $row) {
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+    <div id="delete-user-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>Delete User: <span id="delete-user-name"></span></h2>
+            <form id="delete-user-form">
+                <p id="delete-user-summary"></p>
+                <ul id="delete-user-items" class="owned-items"></ul>
+
+                <fieldset id="delete-user-choices" class="transfer-choices">
+                    <legend>What should happen to these files and directories?</legend>
+                    <label class="radio-label">
+                        <input type="radio" name="transfer_mode" value="user" id="transfer-mode-user"> Transfer ownership to:
+                    </label>
+                    <select id="delete-user-transfer-to" disabled>
+                        <option value="">Select a user…</option>
+                    </select>
+                    <small id="delete-user-no-others" style="display: none;">There are no other users to transfer to.</small>
+                    <label class="radio-label">
+                        <input type="radio" name="transfer_mode" value="all" id="transfer-mode-all"> Make them available to all users
+                    </label>
+                </fieldset>
+
+                <p class="danger-note">Deleting a user is permanent.</p>
+                <div class="modal-actions">
+                    <button type="submit" id="confirm-delete-user-btn" class="danger-btn" disabled>Delete User</button>
+                    <button type="button" id="cancel-delete-user-btn" style="background-color: var(--secondary-color);">Cancel</button>
+                </div>
+            </form>
+            <div id="delete-user-response"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js" integrity="sha384-rCrHshtE6GZUAsykqKBcqaLf4HE5eClDpD23L6y6S2qMwMeirMo1sp8YWDAMnBPT" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="assets/admin.js"></script>
     <script>
         // Simple accordion for help

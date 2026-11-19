@@ -1,5 +1,6 @@
 <?php
 // src/Admin.php
+require_once __DIR__ . '/Security.php';
 
 class Admin {
     private $db;
@@ -19,8 +20,10 @@ class Admin {
             $tree[] = [
                 'id' => (string)$item['id'],
                 'parent' => $item['parent_id'] === null ? '#' : (string)$item['parent_id'],
-                'text' => htmlspecialchars($item['name']),
-                'type' => $item['type']
+                // jstree renders 'text' as HTML, so it is escaped; use data.name wherever plain text is needed
+                'text' => htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'),
+                'type' => $item['type'],
+                'data' => ['name' => $item['name']],
             ];
         }
         
@@ -33,192 +36,337 @@ class Admin {
         return $this->db->single();
     }
 
+    // --- Content encoding ---
+    // txt/app content is stored HTML-encoded exactly once. Encode on save; decode
+    // before showing it in the editor, displaying it to players, or running a script.
+
+    public static function encodeContent($raw) {
+        return htmlspecialchars((string)$raw, ENT_QUOTES, 'UTF-8');
+    }
+
+    public static function decodeContent($stored) {
+        return htmlspecialchars_decode((string)$stored, ENT_QUOTES);
+    }
+
+    /**
+     * An item as the admin editor needs it: txt/app content decoded to the text the
+     * author wrote (so saving it again doesn't double-encode), and no password hash.
+     */
+    public function getItemForEditor($id) {
+        $item = $this->getItem($id);
+        if (!$item) {
+            return false;
+        }
+        if ($item['type'] === 'txt' || $item['type'] === 'app') {
+            $item['content'] = self::decodeContent($item['content']);
+        }
+        $item['has_password'] = !empty($item['password']);
+        unset($item['password']);
+        return $item;
+    }
+
+    // --- Input validation helpers ---
+
+    const ITEM_TYPES = ['dir', 'txt', 'app', 'img'];
+    const THEME_KEYS = [
+        'background_color', 'text_color', 'prompt_color_user', 'prompt_color_path',
+        'terminal_title', 'login_greeting', 'motd',
+    ];
+    const THEME_COLOR_KEYS = ['background_color', 'text_color', 'prompt_color_user', 'prompt_color_path'];
+
+    private static function fail($message) {
+        return ['success' => false, 'message' => $message];
+    }
+
+    /**
+     * A positive integer ID from request input, or null. Strings must be all digits, so
+     * values like "1abc" (which MySQL would silently treat as 1) are rejected.
+     */
+    public static function toId($value) {
+        if (is_int($value)) {
+            return $value > 0 ? $value : null;
+        }
+        if (is_string($value) && $value !== '' && ctype_digit($value)) {
+            $id = (int)$value;
+            return $id > 0 ? $id : null;
+        }
+        return null;
+    }
+
+    private static function withExtension($name, $type) {
+        $extensions = ['txt' => '.txt', 'app' => '.app', 'img' => '.img'];
+        if (isset($extensions[$type]) && substr($name, -4) !== $extensions[$type]) {
+            $name .= $extensions[$type];
+        }
+        return $name;
+    }
+
+    /** Error message for an invalid item name, or null when it is fine. */
+    private static function validateName($name) {
+        if ($name === '.' || $name === '..') {
+            return 'That name is reserved.';
+        }
+        if (preg_match('/[\/\\\\]/', $name)) {
+            return 'Names cannot contain slashes.';
+        }
+        if (preg_match('/\s/u', $name)) {
+            return 'Names cannot contain spaces: players type them as a single word (e.g. cat my_file.txt).';
+        }
+        if (preg_match('/[\x00-\x1F\x7F]/', $name)) {
+            return 'Names cannot contain control characters.';
+        }
+        if (mb_strlen($name) > 100) {
+            return 'Names can be at most 100 characters (including the extension).';
+        }
+        return null;
+    }
+
+    /** Name from the form, trimmed and with its type's extension. Returns [name, error]. */
+    private static function prepareName($rawName, $type) {
+        $raw = is_string($rawName) ? trim($rawName) : '';
+        if ($raw === '') {
+            return [null, 'Name is required.'];
+        }
+        $name = self::withExtension($raw, $type);
+        return [$name, self::validateName($name)];
+    }
+
+    private function userExists($id) {
+        $this->db->query("SELECT id FROM users WHERE id = :id");
+        $this->db->bind(':id', $id);
+        return (bool)$this->db->single();
+    }
+
+    /** Owner from the form: null for All Users, an existing user's ID, or false if invalid. */
+    private function resolveOwnerId($value) {
+        if ($value === null || $value === '' || $value === 'null') {
+            return null;
+        }
+        $id = self::toId($value);
+        if ($id === null || !$this->userExists($id)) {
+            return false;
+        }
+        return $id;
+    }
+
+    private static function optionalString($value) {
+        return (is_string($value) && $value !== '') ? $value : null;
+    }
+
+    private static function isDuplicateKey(PDOException $e) {
+        return $e->getCode() == 23000;
+    }
+
+    // --- Filesystem changes ---
+
     public function addItem($data) {
-        if (empty($data['name']) || empty($data['type']) || empty($data['parent_id'])) {
-            return ['success' => false, 'message' => 'Name, type, and parent are required.'];
+        if (!is_array($data)) {
+            return self::fail('Invalid request.');
+        }
+        $type = $data['type'] ?? '';
+        if (!in_array($type, self::ITEM_TYPES, true)) {
+            return self::fail('Invalid item type.');
+        }
+        $parentId = self::toId($data['parent_id'] ?? null);
+        $parent = $parentId !== null ? $this->getItem($parentId) : false;
+        if (!$parent || $parent['type'] !== 'dir') {
+            return self::fail('Choose an existing directory to add the item to.');
+        }
+        [$name, $nameError] = self::prepareName($data['name'] ?? null, $type);
+        if ($nameError !== null) {
+            return self::fail($nameError);
+        }
+        $ownerId = $this->resolveOwnerId($data['owner_id'] ?? null);
+        if ($ownerId === false) {
+            return self::fail('The selected owner no longer exists. Choose a user or All Users.');
         }
 
-        $name = $data['name'];
-        $type = $data['type'];
-        if ($type === 'txt' && substr($name, -4) !== '.txt') {
-            $name .= '.txt';
-        } elseif ($type === 'app' && substr($name, -4) !== '.app') {
-            $name .= '.app';
-        } elseif ($type === 'img' && substr($name, -4) !== '.img') {
-            $name .= '.img';
-        }
-        
-        $password = !empty($data['password']) ? password_hash($data['password'], PASSWORD_ARGON2ID) : null;
-        
-        $sql = "INSERT INTO filesystem (parent_id, name, type, content, password, password_hint, is_hidden, owner_id) 
-                VALUES (:parent_id, :name, :type, :content, :password, :password_hint, :is_hidden, :owner_id)";
-                
-        $this->db->query($sql);
-        $this->db->bind(':parent_id', $data['parent_id']);
-        $this->db->bind(':name', $name);
-        $this->db->bind(':type', $data['type']);
-        if ($data['type'] === 'img') {
-            $content = ($data['image_width'] ?? '') . ';' . ($data['image_content'] ?? '');
+        $plainPassword = self::optionalString($data['password'] ?? null);
+        $password = $plainPassword !== null ? password_hash($plainPassword, PASSWORD_ARGON2ID) : null;
+
+        if ($type === 'img') {
+            $content = (string)($data['image_width'] ?? '') . ';' . (string)($data['image_content'] ?? '');
+        } elseif ($type === 'dir') {
+            $content = null;
         } else {
-            $content = ($data['type'] !== 'dir') ? htmlspecialchars($data['content'] ?? '', ENT_QUOTES, 'UTF-8') : null;
+            $content = self::encodeContent($data['content'] ?? '');
         }
+
+        $this->db->query("INSERT INTO filesystem (parent_id, name, type, content, password, password_hint, is_hidden, owner_id)
+                VALUES (:parent_id, :name, :type, :content, :password, :password_hint, :is_hidden, :owner_id)");
+        $this->db->bind(':parent_id', $parentId);
+        $this->db->bind(':name', $name);
+        $this->db->bind(':type', $type);
         $this->db->bind(':content', $content);
         $this->db->bind(':password', $password);
-        $this->db->bind(':password_hint', !empty($data['password_hint']) ? $data['password_hint'] : null);
-        $this->db->bind(':is_hidden', isset($data['is_hidden']) ? 1 : 0);
-        $owner_id = (!empty($data['owner_id']) && $data['owner_id'] !== 'null') ? $data['owner_id'] : null;
-        $this->db->bind(':owner_id', $owner_id);
+        $this->db->bind(':password_hint', $password !== null ? self::optionalString($data['password_hint'] ?? null) : null);
+        $this->db->bind(':is_hidden', !empty($data['is_hidden']) ? 1 : 0);
+        $this->db->bind(':owner_id', $ownerId);
 
         try {
-            if ($this->db->execute()) {
-                return ['success' => true, 'message' => 'Item added successfully!'];
-            }
+            $this->db->execute();
+            return ['success' => true, 'message' => 'Item added successfully!'];
         } catch (PDOException $e) {
-            if ($e->getCode() == 23000) {
-                 return ['success' => false, 'message' => 'Error: An item with this name already exists in this directory.'];
+            if (self::isDuplicateKey($e)) {
+                return self::fail('Error: An item with this name already exists in this directory.');
             }
-            return ['success' => false, 'message' => 'Database error.'];
+            error_log('termi-story: addItem failed: ' . $e->getMessage());
+            return self::fail('Database error.');
         }
-        return ['success' => false, 'message' => 'Failed to add item.'];
     }
 
     public function updateItem($data) {
-        if (empty($data['name']) || empty($data['id'])) {
-            return ['success' => false, 'message' => 'ID and Name are required.'];
+        if (!is_array($data)) {
+            return self::fail('Invalid request.');
         }
-
-        $name = $data['name'];
-        $item = $this->getItem($data['id']);
+        $id = self::toId($data['id'] ?? null);
+        if ($id === null) {
+            return self::fail('ID and Name are required.');
+        }
+        if ($id === 1) {
+            return self::fail('The root directory cannot be edited.');
+        }
+        $item = $this->getItem($id);
         if (!$item) {
-            return ['success' => false, 'message' => 'Item not found.'];
+            return self::fail('Item not found.');
         }
-        
-        if ($item['type'] === 'txt' && substr($name, -4) !== '.txt') {
-            $name .= '.txt';
-        } elseif ($item['type'] === 'app' && substr($name, -4) !== '.app') {
-            $name .= '.app';
-        } elseif ($item['type'] === 'img' && substr($name, -4) !== '.img') {
-            $name .= '.img';
+        [$name, $nameError] = self::prepareName($data['name'] ?? null, $item['type']);
+        if ($nameError !== null) {
+            return self::fail($nameError);
         }
-        
-        $password = $item['password'];
-        if (!empty($data['password'])) {
-            $password = password_hash($data['password'], PASSWORD_ARGON2ID);
+        $ownerId = $this->resolveOwnerId($data['owner_id'] ?? null);
+        if ($ownerId === false) {
+            return self::fail('The selected owner no longer exists. Choose a user or All Users.');
         }
 
-        $sql = "UPDATE filesystem SET 
-                    name = :name, 
-                    content = :content, 
-                    password = :password, 
-                    password_hint = :password_hint, 
-                    is_hidden = :is_hidden,
-                    owner_id = :owner_id
-                WHERE id = :id";
-        
-        $this->db->query($sql);
-        $this->db->bind(':id', $data['id']);
-        $this->db->bind(':name', $name);
+        // Lock: remove it, replace it, or keep the current one (blank password field)
+        if (!empty($data['remove_password'])) {
+            $password = null;
+            $hint = null;
+        } else {
+            $newPassword = self::optionalString($data['password'] ?? null);
+            $password = $newPassword !== null ? password_hash($newPassword, PASSWORD_ARGON2ID) : $item['password'];
+            $hint = $password !== null ? self::optionalString($data['password_hint'] ?? null) : null;
+        }
+
         if ($item['type'] === 'img') {
             if (!empty($data['edit_image_content'])) {
-                $content = ($data['edit_image_width'] ?? '') . ';' . ($data['edit_image_content'] ?? '');
+                $content = (string)($data['edit_image_width'] ?? '') . ';' . (string)$data['edit_image_content'];
             } else {
                 $content = $item['content'];
             }
+        } elseif ($item['type'] === 'dir') {
+            $content = null;
         } else {
-            $content = ($item['type'] !== 'dir') ? htmlspecialchars($data['content'] ?? '', ENT_QUOTES, 'UTF-8') : null;
+            $content = self::encodeContent($data['content'] ?? '');
         }
+
+        $this->db->query("UPDATE filesystem SET
+                    name = :name,
+                    content = :content,
+                    password = :password,
+                    password_hint = :password_hint,
+                    is_hidden = :is_hidden,
+                    owner_id = :owner_id
+                WHERE id = :id");
+        $this->db->bind(':id', $id);
+        $this->db->bind(':name', $name);
         $this->db->bind(':content', $content);
         $this->db->bind(':password', $password);
-        $this->db->bind(':password_hint', !empty($data['password_hint']) ? $data['password_hint'] : null);
-        $this->db->bind(':is_hidden', isset($data['is_hidden']) && $data['is_hidden'] ? 1 : 0);
-        $owner_id = (!empty($data['owner_id']) && $data['owner_id'] !== 'null') ? $data['owner_id'] : null;
-        $this->db->bind(':owner_id', $owner_id);
+        $this->db->bind(':password_hint', $hint);
+        $this->db->bind(':is_hidden', !empty($data['is_hidden']) ? 1 : 0);
+        $this->db->bind(':owner_id', $ownerId);
 
-        if ($this->db->execute()) {
+        try {
+            $this->db->execute();
             return ['success' => true, 'message' => 'Item updated successfully!'];
+        } catch (PDOException $e) {
+            if (self::isDuplicateKey($e)) {
+                return self::fail('Error: An item with this name already exists in this directory.');
+            }
+            error_log('termi-story: updateItem failed: ' . $e->getMessage());
+            return self::fail('Database error.');
         }
-        return ['success' => false, 'message' => 'Failed to update item.'];
     }
 
     public function deleteItem($id) {
-        if ($id == 1) {
-            return ['success' => false, 'message' => 'Cannot delete the root directory.'];
+        $id = self::toId($id);
+        if ($id === null) {
+            return self::fail('Invalid item ID.');
+        }
+        if ($id === 1) {
+            return self::fail('Cannot delete the root directory.');
+        }
+        if (!$this->getItem($id)) {
+            return self::fail('Item not found.');
         }
 
         $this->db->query("SELECT id FROM filesystem WHERE parent_id = :id");
         $this->db->bind(':id', $id);
         if (count($this->db->resultSet()) > 0) {
-            return ['success' => false, 'message' => 'Cannot delete a directory that is not empty.'];
+            return self::fail('Cannot delete a directory that is not empty.');
         }
 
         $this->db->query("DELETE FROM filesystem WHERE id = :id");
         $this->db->bind(':id', $id);
-        
-        if ($this->db->execute()) {
-            return ['success' => true, 'message' => 'Item deleted successfully.'];
-        }
-        return ['success' => false, 'message' => 'Failed to delete item.'];
+        $this->db->execute();
+        return ['success' => true, 'message' => 'Item deleted successfully.'];
     }
 
     public function moveItem($data) {
-        if (empty($data['id']) || empty($data['new_parent_id'])) {
-            return ['success' => false, 'message' => 'Item ID and New Parent ID are required.'];
+        $id = self::toId(is_array($data) ? ($data['id'] ?? null) : null);
+        $newParentId = self::toId(is_array($data) ? ($data['new_parent_id'] ?? null) : null);
+        if ($id === null || $newParentId === null) {
+            return self::fail('Item ID and New Parent ID are required.');
         }
-
-        $id = $data['id'];
-        $new_parent_id = $data['new_parent_id'];
-
-        if ($id == 1) {
-            return ['success' => false, 'message' => 'Cannot move the root directory.'];
+        if ($id === 1) {
+            return self::fail('Cannot move the root directory.');
         }
-
-        if ($id == $new_parent_id) {
-            return ['success' => false, 'message' => 'Cannot move an item into itself.'];
+        if ($id === $newParentId) {
+            return self::fail('Cannot move an item into itself.');
         }
 
         $item = $this->getItem($id);
         if (!$item) {
-            return ['success' => false, 'message' => 'Item not found.'];
+            return self::fail('Item not found.');
         }
 
-        $new_parent = $this->getItem($new_parent_id);
-        if (!$new_parent || $new_parent['type'] !== 'dir') {
-            return ['success' => false, 'message' => 'Invalid destination directory.'];
+        $newParent = $this->getItem($newParentId);
+        if (!$newParent || $newParent['type'] !== 'dir') {
+            return self::fail('Invalid destination directory.');
         }
 
         // Prevent moving a directory into its own descendants
         if ($item['type'] === 'dir') {
-            $current_check_id = $new_parent_id;
-            while ($current_check_id != 1 && $current_check_id != null) {
-                if ($current_check_id == $id) {
-                    return ['success' => false, 'message' => 'Cannot move a directory into its own descendant.'];
+            $checkId = $newParentId;
+            for ($depth = 0; $checkId !== null && $checkId !== 1; $depth++) {
+                if ($checkId === $id) {
+                    return self::fail('Cannot move a directory into its own descendant.');
                 }
-                $parent_check = $this->getItem($current_check_id);
-                if ($parent_check) {
-                    $current_check_id = $parent_check['parent_id'];
-                } else {
-                    break;
+                if ($depth > 1000) {
+                    return self::fail('The directory tree is too deep or contains a loop.');
                 }
+                $ancestor = $this->getItem($checkId);
+                $checkId = ($ancestor && $ancestor['parent_id'] !== null) ? (int)$ancestor['parent_id'] : null;
             }
         }
 
         $this->db->query("UPDATE filesystem SET parent_id = :new_parent_id WHERE id = :id");
-        $this->db->bind(':new_parent_id', $new_parent_id);
+        $this->db->bind(':new_parent_id', $newParentId);
         $this->db->bind(':id', $id);
 
         try {
-            if ($this->db->execute()) {
-                return ['success' => true, 'message' => 'Item moved successfully!'];
-            }
+            $this->db->execute();
+            return ['success' => true, 'message' => 'Item moved successfully!'];
         } catch (PDOException $e) {
-            if ($e->getCode() == 23000) {
-                 return ['success' => false, 'message' => 'Error: An item with this name already exists in the destination directory.'];
+            if (self::isDuplicateKey($e)) {
+                return self::fail('Error: An item with this name already exists in the destination directory.');
             }
-            return ['success' => false, 'message' => 'Database error.'];
+            error_log('termi-story: moveItem failed: ' . $e->getMessage());
+            return self::fail('Database error.');
         }
-        return ['success' => false, 'message' => 'Failed to move item.'];
     }
-    
+
     // --- User Methods ---
 
     public function getAllUsers() {
@@ -226,60 +374,176 @@ class Admin {
         return $this->db->resultSet();
     }
 
-    public function addUser($data) {
-        if (empty($data['username']) || empty($data['password'])) {
-            return ['success' => false, 'message' => 'Username and password are required.'];
+    /** Error message for an invalid username, or null. */
+    private static function validateUsername($username) {
+        if (!is_string($username) || trim($username) === '') {
+            return 'Username is required.';
         }
-        
-        $hash = password_hash($data['password'], PASSWORD_ARGON2ID);
+        if ($username !== trim($username)) {
+            return 'Usernames cannot start or end with spaces.';
+        }
+        if (preg_match('/[\x00-\x1F\x7F]/', $username)) {
+            return 'Usernames cannot contain control characters.';
+        }
+        if (mb_strlen($username) > 50) {
+            return 'Usernames can be at most 50 characters.';
+        }
+        return null;
+    }
+
+    public function addUser($data) {
+        $username = is_array($data) ? ($data['username'] ?? null) : null;
+        $password = is_array($data) ? self::optionalString($data['password'] ?? null) : null;
+        if ($error = self::validateUsername($username)) {
+            return self::fail($error);
+        }
+        if ($password === null) {
+            return self::fail('Username and password are required.');
+        }
 
         $this->db->query("INSERT INTO users (username, password, home_directory_id) VALUES (:username, :password, 1)");
-        $this->db->bind(':username', $data['username']);
-        $this->db->bind(':password', $hash);
-        
+        $this->db->bind(':username', $username);
+        $this->db->bind(':password', password_hash($password, PASSWORD_ARGON2ID));
+
         try {
-            if ($this->db->execute()) {
-                return ['success' => true, 'message' => 'User added successfully.'];
-            }
+            $this->db->execute();
+            return ['success' => true, 'message' => 'User added successfully.'];
         } catch (PDOException $e) {
-            return ['success' => false, 'message' => 'Username already exists.'];
+            if (self::isDuplicateKey($e)) {
+                return self::fail('Username already exists.');
+            }
+            error_log('termi-story: addUser failed: ' . $e->getMessage());
+            return self::fail('Database error.');
         }
-        return ['success' => false, 'message' => 'Failed to add user.'];
     }
 
     public function updateUser($data) {
-        if (empty($data['user_id']) || empty($data['username'])) {
-            return ['success' => false, 'message' => 'User ID and username are required.'];
+        $id = self::toId(is_array($data) ? ($data['user_id'] ?? null) : null);
+        $username = is_array($data) ? ($data['username'] ?? null) : null;
+        if ($id === null) {
+            return self::fail('User ID and username are required.');
         }
-        
-        if (empty($data['password'])) {
+        if ($error = self::validateUsername($username)) {
+            return self::fail($error);
+        }
+        if (!$this->userExists($id)) {
+            return self::fail('User not found.');
+        }
+
+        $password = self::optionalString($data['password'] ?? null);
+        if ($password === null) {
             $this->db->query("UPDATE users SET username = :username WHERE id = :id");
         } else {
-            $hash = password_hash($data['password'], PASSWORD_ARGON2ID);
             $this->db->query("UPDATE users SET username = :username, password = :password WHERE id = :id");
-            $this->db->bind(':password', $hash);
+            $this->db->bind(':password', password_hash($password, PASSWORD_ARGON2ID));
         }
-        
-        $this->db->bind(':id', $data['user_id']);
-        $this->db->bind(':username', $data['username']);
+        $this->db->bind(':id', $id);
+        $this->db->bind(':username', $username);
 
-        if ($this->db->execute()) {
+        try {
+            $this->db->execute();
             return ['success' => true, 'message' => 'User updated successfully.'];
+        } catch (PDOException $e) {
+            if (self::isDuplicateKey($e)) {
+                return self::fail('Username already exists.');
+            }
+            error_log('termi-story: updateUser failed: ' . $e->getMessage());
+            return self::fail('Database error.');
         }
-        return ['success' => false, 'message' => 'Failed to update user.'];
     }
 
-    public function deleteUser($id) {
-        if (empty($id)) {
-            return ['success' => false, 'message' => 'User ID is required.'];
-        }
-        $this->db->query("DELETE FROM users WHERE id = :id");
-        $this->db->bind(':id', $id);
+    private function countOwnedItems($userId) {
+        $this->db->query("SELECT COUNT(*) AS n FROM filesystem WHERE owner_id = :id");
+        $this->db->bind(':id', $userId);
+        return (int)($this->db->single()['n'] ?? 0);
+    }
 
-        if ($this->db->execute()) {
-            return ['success' => true, 'message' => 'User deleted successfully.'];
+    /** What a user owns, for the delete-user dialog: a count plus the first paths. */
+    public function getUserOwnership($id, $limit = 50) {
+        $id = self::toId($id);
+        if ($id === null || !$this->userExists($id)) {
+            return self::fail('User not found.');
         }
-        return ['success' => false, 'message' => 'Failed to delete user.'];
+        $this->db->query("SELECT id FROM filesystem WHERE owner_id = :id");
+        $this->db->bind(':id', $id);
+        $ownedIds = array_map(function ($row) { return (int)$row['id']; }, $this->db->resultSet());
+
+        $pathsById = $this->buildPathsById();
+        $paths = [];
+        foreach ($ownedIds as $itemId) {
+            $paths[] = $pathsById[$itemId] ?? "(item #{$itemId})";
+        }
+        sort($paths);
+
+        return ['success' => true, 'data' => [
+            'count' => count($paths),
+            'items' => array_slice($paths, 0, $limit),
+        ]];
+    }
+
+    /**
+     * Delete a user. If they own any files or directories, the admin must say what
+     * happens to them: $transferTo is another user's ID, or 'all' to make them
+     * available to all users. The transfer and the delete happen in one transaction.
+     */
+    public function deleteUser($id, $transferTo = null) {
+        $id = self::toId($id);
+        if ($id === null) {
+            return self::fail('User ID is required.');
+        }
+        if (!$this->userExists($id)) {
+            return self::fail('User not found.');
+        }
+
+        $newOwnerId = null;
+        $newOwnerName = null;
+        if ($transferTo !== null && $transferTo !== '' && $transferTo !== 'all') {
+            $newOwnerId = self::toId($transferTo);
+            if ($newOwnerId === null || $newOwnerId === $id || !$this->userExists($newOwnerId)) {
+                return self::fail('Choose an existing user (other than the one being deleted) to transfer the files to.');
+            }
+            $this->db->query("SELECT username FROM users WHERE id = :id");
+            $this->db->bind(':id', $newOwnerId);
+            $newOwnerName = $this->db->single()['username'];
+        }
+        $decided = ($transferTo === 'all' || $newOwnerId !== null);
+
+        try {
+            $this->db->beginTransaction();
+
+            // Counted inside the transaction so nothing assigned in the meantime slips through
+            $owned = $this->countOwnedItems($id);
+            if ($owned > 0 && !$decided) {
+                $this->db->rollBack();
+                return self::fail("This user owns {$owned} item(s). Choose whether to transfer them to another user or make them available to all users before deleting.");
+            }
+            if ($owned > 0) {
+                $this->db->query("UPDATE filesystem SET owner_id = :new_owner WHERE owner_id = :old_owner");
+                $this->db->bind(':new_owner', $newOwnerId);
+                $this->db->bind(':old_owner', $id);
+                $this->db->execute();
+            }
+
+            $this->db->query("DELETE FROM users WHERE id = :id");
+            $this->db->bind(':id', $id);
+            $this->db->execute();
+
+            $this->db->commit();
+        } catch (PDOException $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            error_log('termi-story: deleteUser failed: ' . $e->getMessage());
+            return self::fail('Database error. The user was not deleted.');
+        }
+
+        $message = 'User deleted successfully.';
+        if ($owned > 0) {
+            $message .= $newOwnerId !== null
+                ? " {$owned} item(s) transferred to {$newOwnerName}."
+                : " {$owned} item(s) are now available to all users.";
+        }
+        return ['success' => true, 'message' => $message, 'transferred' => $owned];
     }
 
     // --- Theme Methods ---
@@ -294,9 +558,38 @@ class Admin {
         return $settings;
     }
 
+    /**
+     * Validate theme settings. Returns [cleanSettings, error]. Unknown keys are ignored;
+     * colours must be hex (#rgb, #rgba, #rrggbb or #rrggbbaa) because they are written into CSS.
+     */
+    public static function validateThemeSettings($data) {
+        if (!is_array($data)) {
+            return [null, 'Invalid theme settings.'];
+        }
+        $clean = [];
+        foreach (self::THEME_KEYS as $key) {
+            if (!array_key_exists($key, $data)) {
+                continue;
+            }
+            $value = $data[$key];
+            if (!is_string($value)) {
+                return [null, "Theme setting '{$key}' must be text."];
+            }
+            if (in_array($key, self::THEME_COLOR_KEYS, true) && !Security::isHexColor($value)) {
+                return [null, "Theme setting '{$key}' must be a hex colour such as #1a1a1a."];
+            }
+            $clean[$key] = $value;
+        }
+        return [$clean, null];
+    }
+
     public function updateThemeSettings($data) {
+        [$clean, $error] = self::validateThemeSettings($data);
+        if ($error !== null) {
+            return self::fail($error);
+        }
         $this->db->query("UPDATE themes SET value = :value WHERE name = :name");
-        foreach ($data as $name => $value) {
+        foreach ($clean as $name => $value) {
             $this->db->bind(':name', $name);
             $this->db->bind(':value', $value);
             $this->db->execute();
@@ -456,6 +749,15 @@ class Admin {
             return $a['depth'] - $b['depth'];
         });
 
+        // Validate the theme up front too, so a bad colour can't fail the import halfway
+        $themeData = [];
+        if ($includeTheme && isset($payload['theme']) && is_array($payload['theme'])) {
+            [$themeData, $themeError] = self::validateThemeSettings($payload['theme']);
+            if ($themeError !== null) {
+                return ['success' => false, 'message' => "Import theme is invalid: {$themeError}"];
+            }
+        }
+
         $this->db->query("SELECT id, username FROM users");
         $usersByName = [];
         foreach ($this->db->resultSet() as $user) {
@@ -552,20 +854,8 @@ class Admin {
                 $created++;
             }
 
-            if ($includeTheme && isset($payload['theme']) && is_array($payload['theme'])) {
-                $allowed = [
-                    'background_color', 'text_color', 'prompt_color_user', 'prompt_color_path',
-                    'terminal_title', 'login_greeting', 'motd'
-                ];
-                $themeData = [];
-                foreach ($allowed as $key) {
-                    if (array_key_exists($key, $payload['theme'])) {
-                        $themeData[$key] = $payload['theme'][$key];
-                    }
-                }
-                if (!empty($themeData)) {
-                    $this->updateThemeSettings($themeData);
-                }
+            if (!empty($themeData)) {
+                $this->updateThemeSettings($themeData);
             }
 
             $this->db->commit();
@@ -588,42 +878,50 @@ class Admin {
         }
     }
 
-    private function buildPathToIdMap() {
+    /** Full path of every filesystem item, keyed by ID (items in a broken chain are left out). */
+    private function buildPathsById() {
         $this->db->query("SELECT id, parent_id, name FROM filesystem");
-        $items = $this->db->resultSet();
         $itemsById = [];
-        foreach ($items as $item) {
+        foreach ($this->db->resultSet() as $item) {
             $itemsById[(int)$item['id']] = $item;
         }
 
         $paths = [];
-        $build = function ($itemId) use (&$build, &$paths, $itemsById) {
+        $visiting = [];
+        $build = function ($itemId) use (&$build, &$paths, &$visiting, $itemsById) {
             if (isset($paths[$itemId])) {
                 return $paths[$itemId];
             }
-            if (!isset($itemsById[$itemId])) {
-                return null;
+            if (!isset($itemsById[$itemId]) || isset($visiting[$itemId])) {
+                return null; // missing parent, or a parent cycle
             }
             $item = $itemsById[$itemId];
             if ($item['parent_id'] === null) {
-                $paths[$itemId] = '/';
-                return '/';
+                return $paths[$itemId] = '/';
             }
+            $visiting[$itemId] = true;
             $parentPath = $build((int)$item['parent_id']);
+            unset($visiting[$itemId]);
             if ($parentPath === null) {
                 return null;
             }
-            $path = rtrim($parentPath, '/') . '/' . $item['name'];
-            $paths[$itemId] = $path;
-            return $path;
+            return $paths[$itemId] = rtrim($parentPath, '/') . '/' . $item['name'];
         };
 
-        $map = [];
-        foreach ($itemsById as $id => $item) {
+        $result = [];
+        foreach (array_keys($itemsById) as $id) {
             $path = $build($id);
             if ($path !== null) {
-                $map[strtolower($path)] = $id; // DB collation is case-insensitive
+                $result[$id] = $path;
             }
+        }
+        return $result;
+    }
+
+    private function buildPathToIdMap() {
+        $map = [];
+        foreach ($this->buildPathsById() as $id => $path) {
+            $map[strtolower($path)] = $id; // DB collation is case-insensitive
         }
         return $map;
     }

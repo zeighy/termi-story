@@ -1,19 +1,19 @@
 <?php
 // export_story.php - A command-line utility to export your Termi-Story content.
-// Place this file in the root directory of your project.
-// Usage from your terminal:
-//   php export_story.php --single=my_story.txt
-//   php export_story.php --individual=my_story_folder
+// Usage from your terminal (works from any directory; output paths are relative to where you run it):
+//   php config/export_story.php --single=my_story.txt
+//   php config/export_story.php --individual=my_story_folder
 
 // --- Environment Setup ---
 // Ensure this script is run from the command line, not a web browser.
-if (php_sapi_name() !== 'cli') {
-    die("This script can only be run from the command line.");
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit("This script can only be run from the command line.\n");
 }
 
 // Include necessary files
-require_once './config/database.php';
-require_once './src/Database.php';
+require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/../src/Database.php';
 
 // --- Argument Parsing ---
 $options = getopt("", ["single::", "individual::"]);
@@ -21,8 +21,8 @@ $options = getopt("", ["single::", "individual::"]);
 if (empty($options)) {
     echo "Termi-Story Exporter\n";
     echo "Usage:\n";
-    echo "  php export_story.php --single[=filename.txt]    Export all content to a single text file.\n";
-    echo "  php export_story.php --individual[=directory]   Export content to individual files in a directory structure.\n";
+    echo "  php config/export_story.php --single[=filename.txt]    Export all content to a single text file.\n";
+    echo "  php config/export_story.php --individual[=directory]   Export content to individual files in a directory structure.\n";
     exit;
 }
 
@@ -62,6 +62,14 @@ foreach ($items as $item) {
     getPath($item['id'], $itemsById);
 }
 
+// txt/app content is stored HTML-encoded; write it out as the author wrote it
+function readableContent($item) {
+    if ($item['type'] === 'txt' || $item['type'] === 'app') {
+        return htmlspecialchars_decode((string)$item['content'], ENT_QUOTES);
+    }
+    return (string)$item['content'];
+}
+
 // --- Export Logic ---
 echo "WARNING: This process may take a long time depending on the amount of data.\n";
 sleep(2); // Give user a moment to read the warning
@@ -82,7 +90,7 @@ if (isset($options['single'])) {
             $fileContent .= "PROTECTED: Yes (Hint: " . ($item['password_hint'] ?? 'No hint') . ")\n";
         }
         $fileContent .= str_repeat("-", 80) . "\n";
-        $fileContent .= $item['content'] . "\n\n";
+        $fileContent .= readableContent($item) . "\n\n";
     }
 
     file_put_contents($filename, $fileContent);
@@ -108,7 +116,7 @@ if (isset($options['individual'])) {
                 mkdir($targetPath, 0755, true);
             }
         } else {
-            file_put_contents($targetPath, $item['content']);
+            file_put_contents($targetPath, readableContent($item));
         }
     }
     echo "Successfully exported all content to the '{$dirname}' directory.\n";

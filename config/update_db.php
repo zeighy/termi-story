@@ -1,4 +1,9 @@
 <?php
+// Command-line only: these scripts change the database and must never be reachable from a browser.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit("This script can only be run from the command line.\n");
+}
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/../src/Database.php';
 

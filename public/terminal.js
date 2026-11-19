@@ -101,9 +101,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.innerText = text;
-        return div.innerHTML;
+        return String(text ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     // Start it
@@ -226,12 +229,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (baseCommand === 'clear') {
                         terminalOutput.innerHTML = '';
                     } else if (baseCommand === 'logout') {
+                        // End the server-side session before returning to the login prompt
+                        try {
+                            await fetch('api.php', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ action: 'logout' })
+                            });
+                        } catch (err) {
+                            console.error('Logout request failed:', err);
+                        }
                         location.reload();
+                        return;
                     } else {
                         await processCommand(command);
-                        if (baseCommand === 'cd') {
-                            await processCommand('');
-                        }
                         if (baseCommand === 'reset') {
                             await simulateCommand('run init.app');
                         }
@@ -276,13 +287,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (autocompleteMatches.length === 0 || partial !== lastPartial) {
             lastPartial = partial;
-            const response = await fetch('api.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'autocomplete', partial: partial, full_line: fullLine })
-            });
-            const data = await response.json();
-            autocompleteMatches = data.matches || [];
+            const data = await postJson({ action: 'autocomplete', partial: partial, full_line: fullLine });
+            autocompleteMatches = (data && Array.isArray(data.matches)) ? data.matches : [];
             autocompleteIndex = 0;
         }
 
@@ -297,16 +303,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // POST to the API and return the parsed JSON, or null if the server or network failed
+    async function postJson(body) {
+        try {
+            const response = await fetch('api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            return await response.json();
+        } catch (err) {
+            console.error('API request failed:', err);
+            return null;
+        }
+    }
+
     async function handleLogin(username, password) {
-        const response = await fetch('api.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'login', username, password })
-        });
-        const data = await response.json();
-        
+        const data = await postJson({ action: 'login', username, password });
+        if (!data) {
+            displayText('Connection error. Please try again.');
+            promptLabel.textContent = 'Username:';
+            terminalState = 'login-username';
+            return;
+        }
+
         if (data.success) {
-            displayOutput(data.output + "\n\n" + motd);
+            displayText(data.output + "\n\n" + motd);
             terminalState = 'active';
             await processCommand('');
 
@@ -314,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await simulateCommand('run init.app');
             }
         } else {
-            displayOutput(data.output);
+            displayText(data.output);
             promptLabel.textContent = 'Username:';
             terminalState = 'login-username';
         }
@@ -346,21 +368,27 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
     }
 
-    function displayOutput(output) {
+    // Server output is plain text unless the response says format: 'html' (only ls does).
+    function displayText(text) {
+        displayHtml(escapeHtml(text));
+    }
+
+    // Only for trusted markup: the server's escaped ls listing, or HTML built here from escaped parts.
+    function displayHtml(html) {
         const outputLine = document.createElement('div');
-        outputLine.innerHTML = output.replace(/\n/g, '<br>');
+        outputLine.classList.add('output-line'); // white-space: pre-wrap, like animated output
+        outputLine.innerHTML = String(html).replace(/\n/g, '<br>');
         terminalOutput.appendChild(outputLine);
         scrollToBottom();
     }
 
     async function processCommand(command) {
-        const response = await fetch('api.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: command })
-        });
-        const data = await response.json();
-        
+        const data = await postJson({ command: command });
+        if (!data) {
+            displayHtml('<span style="color: red;">Connection error. Please try again.</span>');
+            return;
+        }
+
         if (data.output) {
             if (data.animation === 'typewriter') {
                 await typewriterEffect(data.output);
@@ -368,17 +396,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 await typewriterChunkEffect(data.output);
             } else if (data.animation === 'imageRender') {
                 await renderImageProgressive(data.output);
+            } else if (data.format === 'html') {
+                displayHtml(data.output);
             } else {
-                displayOutput(data.output);
+                displayText(data.output);
             }
         }
         if (data.path && data.username) {
             const userColor = getComputedStyle(document.documentElement).getPropertyValue('--prompt-user-color').trim();
             const pathColor = getComputedStyle(document.documentElement).getPropertyValue('--prompt-path-color').trim();
-            promptLabel.innerHTML = `<span style="color: ${userColor};">${data.username}</span>@term:<span style="color: ${pathColor};">${data.path}</span>$ `;
+            promptLabel.innerHTML = `<span style="color: ${escapeHtml(userColor)};">${escapeHtml(data.username)}</span>@term:<span style="color: ${escapeHtml(pathColor)};">${escapeHtml(data.path)}</span>$ `;
         }
         if (data.error) {
-            displayOutput(`<span style="color: red;">${data.error}</span>`);
+            displayHtml(`<span style="color: red;">${escapeHtml(data.error)}</span>`);
         }
         scrollToBottom();
     }
@@ -410,7 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise(resolve => {
             const parts = dataString.split(';');
             if (parts.length < 2) {
-                displayOutput("Error parsing image data.");
+                displayText("Error parsing image data.");
                 resolve();
                 return;
             }
@@ -418,8 +448,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const width = parseInt(parts[0], 10);
             const pixelData = parts[1];
 
-            if (isNaN(width) || width <= 0) {
-                displayOutput("Invalid image dimensions.");
+            // Reject absurd sizes (e.g. from a hand-edited import) that would hang the browser
+            if (isNaN(width) || width <= 0 || width > 4096 || pixelData.length / width > 4096) {
+                displayText("Invalid image dimensions.");
                 resolve();
                 return;
             }
