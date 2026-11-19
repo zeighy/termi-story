@@ -226,7 +226,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (baseCommand === 'clear') {
                         terminalOutput.innerHTML = '';
                     } else if (baseCommand === 'logout') {
+                        // End the server-side session before returning to the login prompt
+                        try {
+                            await fetch('api.php', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ action: 'logout' })
+                            });
+                        } catch (err) {
+                            console.error('Logout request failed:', err);
+                        }
                         location.reload();
+                        return;
                     } else {
                         await processCommand(command);
                         if (baseCommand === 'cd') {
@@ -306,7 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await response.json();
         
         if (data.success) {
-            displayOutput(data.output + "\n\n" + motd);
+            // The MOTD is admin/import supplied text; render it as text, not HTML
+            displayOutput(data.output + "\n\n" + escapeHtml(motd));
             terminalState = 'active';
             await processCommand('');
 

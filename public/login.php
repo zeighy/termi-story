@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once '../src/Security.php';
+Security::startSession(Security::PLAYER_SESSION_NAME);
 if (isset($_SESSION['user_id'])) {
     header('Location: index.php');
     exit;

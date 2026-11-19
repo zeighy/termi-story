@@ -30,16 +30,19 @@ $(function () {
     // ============================
     // API HELPER
     // ============================
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
     async function apiRequest(action, body) {
         try {
             const response = await fetch('api_admin.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
                 body: JSON.stringify({ action, ...body })
             });
-            if (action === 'get_fs_tree') {
-                return await response.json();
-            }
             return await response.json();
         } catch (error) {
             console.error('API Request Error:', error);
@@ -111,13 +114,11 @@ $(function () {
         renderMainView('1');
     }).jstree({
         'core': {
-            'data': {
-                'url': 'api_admin.php',
-                'type': 'POST',
-                'dataType': 'json',
-                'data': function (node) {
-                    return { 'action': 'get_fs_tree' };
-                }
+            // Load through apiRequest so the tree request carries the JSON body and CSRF header
+            'data': function (node, callback) {
+                apiRequest('get_fs_tree').then((result) => {
+                    callback.call(this, Array.isArray(result) ? result : []);
+                });
             },
             'check_callback': true,
             'themes': {

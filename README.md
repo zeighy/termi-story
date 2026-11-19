@@ -88,6 +88,17 @@ By doing this, the public can **only** access files inside /public. All of your 
 2. **Rename the Admin Directory (Recommended):** After you have finished creating your story's content, consider renaming the /admin directory to something random and hard to guess (e.g., /adm_panel_a7b3c9). Or, you can also just delete it entirely as the public and backend has no dependencies from the admin panel.
 3. **Server-Level Protection (Advanced):** Use an .htaccess file (on Apache) or similar configurations on Nginx to password-protect the admin directory at the server level.
 
+**Built-in Protections**
+
+- **Sessions:** Player and admin sessions use separate cookies (`termistory` and `termistory_admin`) flagged `HttpOnly` and `SameSite=Lax`, plus `Secure` when served over HTTPS. The session ID is replaced on every login, and PHP's strict session mode rejects session IDs the server didn't issue.
+- **CSRF:** The admin API only accepts JSON `POST` requests that carry the session's CSRF token in an `X-CSRF-Token` header. The admin login and logout forms also require the token. The player API only accepts JSON `POST` requests.
+- **Rate limiting:** Failed password attempts are throttled:
+  - Player login: 5 failures per username per IP address, and 50 per IP address, in 15 minutes.
+  - Admin login: 5 failures per IP address in 15 minutes.
+  - `unlock`: 20 wrong passwords per player in 5 minutes.
+
+  Attempt counts are kept as small files in the system temp directory, so no database changes are needed. To store them elsewhere, add `define('RATE_LIMIT_DIR', '/path/to/dir');` to `config/database.php`. Limits are keyed on `REMOTE_ADDR`, so if you run behind a reverse proxy, configure it to pass the real client address to PHP (for example, `mod_remoteip` or the nginx `real_ip` module). Otherwise, all players share one IP-based limit.
+
 # Creator's Guide: The Scripting Engine
 
 The heart of your interactive story is the scripting engine. This guide explains how to write scripts to create dynamic experiences.
@@ -102,6 +113,8 @@ The heart of your interactive story is the scripting engine. This guide explains
 - **FETCH \[variable_name\] = \[URL\]**: Fetches data from a fixed URL endpoint. The endpoint must return JSON containing a "value" field. The value is sanitized to only allow alphanumeric characters and then stored in the specified variable. On error (connection issue, missing "value" field, etc.), the variable is set to an empty string ("").
 
 > **Note on FETCH:** You can also use `FETCH` to ping a URL (e.g., to count how many times a script has run). The server should still return JSON with a `value` field (like `{"value": "OK"}`) for the script to successfully proceed. You can then optionally reset the variable on the next line using `SET [variable_name] = ""`.
+
+> **FETCH restrictions:** For safety, `FETCH` only supports `http://` and `https://` URLs, does not follow redirects (use the final URL), reads at most 64 KB, and times out after 10 seconds. URLs whose host resolves to a private, loopback, link-local or otherwise non-public address (e.g. `localhost`, `192.168.x.x`, `169.254.169.254`) are refused. If your endpoint runs on the same machine or your LAN, add `define('FETCH_ALLOW_PRIVATE_HOSTS', true);` to `config/database.php`. Only do this if you trust every script on the server, including any you import.
 
 **Variables Explained**
 
@@ -161,4 +174,4 @@ As a player, your goal is to explore the pseudo-filesystem and uncover secrets.
 
 **Important Note on Progress**
 
-Your progress (variables set by scripts, unlocked files) is tied to your current **browser session**. It does not follow your user account. If you close your browser, switch to a different computer, or your session expires, your progress will be reset.
+Your progress (variables set by scripts, unlocked files) is tied to your current **browser session**. It does not follow your user account. If you close your browser, switch to a different computer, run `logout`, or your session expires, your progress will be reset. If a different player logs in on the same browser, they start fresh rather than inheriting the previous player's progress.

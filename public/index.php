@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once '../src/Security.php';
+Security::startSession(Security::PLAYER_SESSION_NAME);
 
 // Fetch theme settings from the database
 require_once '../config/database.php';
@@ -42,9 +43,10 @@ foreach ($themeResults as $row) {
         </div>
     </div>
     <script>
-        // Pass the MOTD to JavaScript
-        const motd = `<?php echo addslashes($theme['motd'] ?? ''); ?>`;
-        const loginGreeting = `<?php echo addslashes($theme['login_greeting'] ?? 'Welcome.'); ?>`;
+        // Pass the MOTD to JavaScript. json_encode with the HEX flags yields a JS string
+        // literal that cannot break out of the string or the <script> element.
+        const motd = <?php echo json_encode((string)($theme['motd'] ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+        const loginGreeting = <?php echo json_encode((string)($theme['login_greeting'] ?? 'Welcome.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     </script>
     <script src="terminal.js"></script>
 </body>

@@ -1,10 +1,12 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/Security.php';
+Security::startSession(Security::ADMIN_SESSION_NAME);
 
 if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !== true) {
     header('Location: login.php');
     exit;
 }
+$csrfToken = Security::csrfToken();
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../src/Database.php';
@@ -22,6 +24,7 @@ foreach ($themeResults as $row) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($csrfToken); ?>">
     <title>Admin Panel - Filesystem</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
     <link rel="stylesheet" href="assets/admin.css">
@@ -42,7 +45,10 @@ foreach ($themeResults as $row) {
             <button class="tab-link" data-tab="users">Users</button>
             <button class="tab-link" data-tab="theme">Theme</button>
             <button class="tab-link" data-tab="story">Story</button>
-            <a href="logout.php" class="logout-link">Logout</a>
+            <form action="logout.php" method="post" class="logout-form">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <button type="submit" class="logout-link">Logout</button>
+            </form>
         </div>
     </div>
 

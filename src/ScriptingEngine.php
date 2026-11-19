@@ -74,16 +74,7 @@ class ScriptingEngine {
             $varName = trim($parts[0]);
             $url = trim($parts[1]);
 
-            $context = stream_context_create([
-                'http' => [
-                    'timeout' => 20
-                ],
-                'ssl' => [
-                    'timeout' => 20
-                ]
-            ]);
-
-            $result = @file_get_contents($url, false, $context);
+            $result = $this->fetchUrl($url);
 
             $finalValue = "";
             if ($result !== false) {
@@ -97,6 +88,98 @@ class ScriptingEngine {
 
             $this->variables[$varName] = $finalValue;
         }
+    }
+
+    // --- FETCH safety ---
+    // FETCH only talks to http(s) servers on public IP addresses. This stops scripts
+    // (including ones arriving via story import) from reading local files through PHP
+    // stream wrappers (file://, php://, phar://) or probing internal services and
+    // cloud metadata endpoints. To allow LAN/localhost endpoints, define
+    // FETCH_ALLOW_PRIVATE_HOSTS as true in config/database.php.
+
+    const FETCH_TIMEOUT_SECONDS = 10;
+    const FETCH_MAX_BYTES = 65536;
+
+    /** Returns the response body, or false if the URL is disallowed or the request fails. */
+    private function fetchUrl($url) {
+        $parsed = parse_url($url);
+        if ($parsed === false || empty($parsed['host'])) {
+            return false;
+        }
+        $scheme = strtolower($parsed['scheme'] ?? '');
+        if ($scheme !== 'http' && $scheme !== 'https') {
+            return false;
+        }
+        if (isset($parsed['user']) || isset($parsed['pass'])) {
+            return false;
+        }
+
+        $host = trim($parsed['host'], '[]');
+        $port = isset($parsed['port']) ? (int)$parsed['port'] : null;
+        $hostHeader = (strpos($host, ':') !== false ? "[{$host}]" : $host) . ($port !== null ? ":{$port}" : '');
+
+        $httpOptions = [
+            'timeout' => self::FETCH_TIMEOUT_SECONDS,
+            'follow_location' => 0, // a redirect could point somewhere we never validated
+            'user_agent' => 'termi-story-fetch',
+        ];
+        $sslOptions = [
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+        ];
+        $requestUrl = $url;
+
+        $allowPrivate = defined('FETCH_ALLOW_PRIVATE_HOSTS') && FETCH_ALLOW_PRIVATE_HOSTS;
+        if (!$allowPrivate) {
+            $ips = $this->resolveHost($host);
+            if (empty($ips)) {
+                return false;
+            }
+            foreach ($ips as $ip) {
+                if (!$this->isPublicIp($ip)) {
+                    return false;
+                }
+            }
+            // Connect to the address we just checked (not a fresh DNS lookup), while
+            // still sending the original Host header and validating TLS against the hostname.
+            $pinned = strpos($ips[0], ':') !== false ? "[{$ips[0]}]" : $ips[0];
+            $requestUrl = $scheme . '://' . $pinned . ($port !== null ? ":{$port}" : '')
+                . ($parsed['path'] ?? '/')
+                . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
+            $httpOptions['header'] = "Host: {$hostHeader}\r\n";
+            $sslOptions['peer_name'] = $host;
+        }
+
+        $context = stream_context_create(['http' => $httpOptions, 'ssl' => $sslOptions]);
+        return @file_get_contents($requestUrl, false, $context, 0, self::FETCH_MAX_BYTES);
+    }
+
+    /** All IP addresses the host resolves to (or the literal IP itself). */
+    private function resolveHost($host) {
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return [$host];
+        }
+        $ips = @gethostbynamel($host) ?: [];
+        $aaaa = @dns_get_record($host, DNS_AAAA) ?: [];
+        foreach ($aaaa as $record) {
+            if (!empty($record['ipv6'])) {
+                $ips[] = $record['ipv6'];
+            }
+        }
+        return array_values(array_unique($ips));
+    }
+
+    private function isPublicIp($ip) {
+        // IPv4-mapped IPv6 (::ffff:a.b.c.d) is checked as the IPv4 address it carries
+        $packed = @inet_pton($ip);
+        if ($packed !== false && strlen($packed) === 16 && substr($packed, 0, 12) === str_repeat("\0", 10) . "\xff\xff") {
+            $ip = inet_ntop(substr($packed, 12));
+        }
+        $flags = FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE;
+        if (defined('FILTER_FLAG_GLOBAL_RANGE')) {
+            $flags |= FILTER_FLAG_GLOBAL_RANGE; // PHP 8.2+: also excludes CGNAT, documentation ranges, etc.
+        }
+        return filter_var($ip, FILTER_VALIDATE_IP, $flags) !== false;
     }
 
     private function handleSet($args) {

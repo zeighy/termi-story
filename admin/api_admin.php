@@ -1,31 +1,47 @@
 <?php
+require_once __DIR__ . '/../src/Security.php';
+Security::startSession(Security::ADMIN_SESSION_NAME);
 header('Content-Type: application/json');
 
-require_once '../config/database.php';
-require_once '../src/Database.php';
-require_once '../src/Admin.php';
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../src/Database.php';
+require_once __DIR__ . '/../src/Admin.php';
 
-session_start();
-if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !== true) {
-    echo json_encode(['success' => false, 'message' => 'Authentication required.']);
+function admin_api_reject($status, $message) {
+    http_response_code($status);
+    echo json_encode(['success' => false, 'message' => $message]);
     exit;
+}
+
+if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !== true) {
+    admin_api_reject(401, 'Authentication required.');
+}
+
+// CSRF protection: only JSON POSTs carrying the session's token (in the X-CSRF-Token
+// header) are accepted. Cross-site forms can neither send JSON nor set custom headers.
+if (!Security::isPost()) {
+    admin_api_reject(405, 'POST required.');
+}
+if (!Security::verifyCsrfToken(Security::csrfTokenFromHeader())) {
+    admin_api_reject(403, 'Invalid or missing CSRF token. Reload the admin panel and try again.');
+}
+
+$rawBody = file_get_contents('php://input');
+if (($rawBody === '' || $rawBody === false) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    admin_api_reject(413, 'Request too large for the server (post_max_size is ' . ini_get('post_max_size') . '). Raise post_max_size in php.ini and retry.');
+}
+if (!Security::isJsonRequest()) {
+    admin_api_reject(415, 'Requests must be sent as application/json.');
+}
+$input = json_decode($rawBody, true);
+if (!is_array($input)) {
+    admin_api_reject(400, 'Request body must be a JSON object.');
 }
 
 $db = new Database();
 $admin = new Admin($db);
 
 $response = ['success' => false];
-
-$rawBody = file_get_contents('php://input');
-if (($rawBody === '' || $rawBody === false) && empty($_POST) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
-    echo json_encode(['success' => false, 'message' => 'Request too large for the server (post_max_size is ' . ini_get('post_max_size') . '). Raise post_max_size in php.ini and retry.']);
-    exit;
-}
-$input = json_decode($rawBody, true);
-
-if ($input === null) {
-    $input = $_POST;
-}
 
 $action = $input['action'] ?? null;
 $data = $input['data'] ?? [];

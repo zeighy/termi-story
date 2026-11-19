@@ -1,8 +1,14 @@
 <?php
 // src/Terminal.php
-require_once 'ScriptingEngine.php';
+require_once __DIR__ . '/ScriptingEngine.php';
+require_once __DIR__ . '/RateLimiter.php';
 
 class Terminal {
+    // Wrong unlock passwords allowed per player before a cooldown. Generous enough for
+    // normal puzzle guessing, but stops scripted brute force (and the Argon2 cost it incurs).
+    const UNLOCK_MAX_FAILURES = 20;
+    const UNLOCK_WINDOW_SECONDS = 300;
+
     private $db;
     private $userId;
     private $currentDirId;
@@ -201,11 +207,18 @@ class Terminal {
             return ['output' => 'usage: unlock [filename] [password]'];
         }
 
+        $limiterKey = 'unlock-user:' . $this->userId;
+        $retryAfter = RateLimiter::retryAfter($limiterKey, self::UNLOCK_MAX_FAILURES, self::UNLOCK_WINDOW_SECONDS);
+        if ($retryAfter > 0) {
+            return ['output' => "Access Denied. Too many failed attempts. Try again in {$retryAfter} seconds."];
+        }
+
         $passwordAttempt = $args[1];
         if (password_verify($passwordAttempt, $file['password'])) {
             $_SESSION['unlocked_files'][] = $file['id'];
             return ['output' => "Access Granted. You can now 'cat' the file."];
         } else {
+            RateLimiter::hit($limiterKey, self::UNLOCK_WINDOW_SECONDS);
             return ['output' => "Access Denied. Incorrect password."];
         }
     }
