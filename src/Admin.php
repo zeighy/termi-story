@@ -178,7 +178,7 @@ class Admin {
         }
         $ownerId = $this->resolveOwnerId($data['owner_id'] ?? null);
         if ($ownerId === false) {
-            return self::fail('The selected owner does not exist.');
+            return self::fail('The selected owner no longer exists. Choose a user or All Users.');
         }
 
         $plainPassword = self::optionalString($data['password'] ?? null);
@@ -236,7 +236,7 @@ class Admin {
         }
         $ownerId = $this->resolveOwnerId($data['owner_id'] ?? null);
         if ($ownerId === false) {
-            return self::fail('The selected owner does not exist.');
+            return self::fail('The selected owner no longer exists. Choose a user or All Users.');
         }
 
         // Lock: remove it, replace it, or keep the current one (blank password field)
@@ -452,15 +452,98 @@ class Admin {
         }
     }
 
-    public function deleteUser($id) {
+    private function countOwnedItems($userId) {
+        $this->db->query("SELECT COUNT(*) AS n FROM filesystem WHERE owner_id = :id");
+        $this->db->bind(':id', $userId);
+        return (int)($this->db->single()['n'] ?? 0);
+    }
+
+    /** What a user owns, for the delete-user dialog: a count plus the first paths. */
+    public function getUserOwnership($id, $limit = 50) {
+        $id = self::toId($id);
+        if ($id === null || !$this->userExists($id)) {
+            return self::fail('User not found.');
+        }
+        $this->db->query("SELECT id FROM filesystem WHERE owner_id = :id");
+        $this->db->bind(':id', $id);
+        $ownedIds = array_map(function ($row) { return (int)$row['id']; }, $this->db->resultSet());
+
+        $pathsById = $this->buildPathsById();
+        $paths = [];
+        foreach ($ownedIds as $itemId) {
+            $paths[] = $pathsById[$itemId] ?? "(item #{$itemId})";
+        }
+        sort($paths);
+
+        return ['success' => true, 'data' => [
+            'count' => count($paths),
+            'items' => array_slice($paths, 0, $limit),
+        ]];
+    }
+
+    /**
+     * Delete a user. If they own any files or directories, the admin must say what
+     * happens to them: $transferTo is another user's ID, or 'all' to make them
+     * available to all users. The transfer and the delete happen in one transaction.
+     */
+    public function deleteUser($id, $transferTo = null) {
         $id = self::toId($id);
         if ($id === null) {
             return self::fail('User ID is required.');
         }
-        $this->db->query("DELETE FROM users WHERE id = :id");
-        $this->db->bind(':id', $id);
-        $this->db->execute();
-        return ['success' => true, 'message' => 'User deleted successfully.'];
+        if (!$this->userExists($id)) {
+            return self::fail('User not found.');
+        }
+
+        $newOwnerId = null;
+        $newOwnerName = null;
+        if ($transferTo !== null && $transferTo !== '' && $transferTo !== 'all') {
+            $newOwnerId = self::toId($transferTo);
+            if ($newOwnerId === null || $newOwnerId === $id || !$this->userExists($newOwnerId)) {
+                return self::fail('Choose an existing user (other than the one being deleted) to transfer the files to.');
+            }
+            $this->db->query("SELECT username FROM users WHERE id = :id");
+            $this->db->bind(':id', $newOwnerId);
+            $newOwnerName = $this->db->single()['username'];
+        }
+        $decided = ($transferTo === 'all' || $newOwnerId !== null);
+
+        try {
+            $this->db->beginTransaction();
+
+            // Counted inside the transaction so nothing assigned in the meantime slips through
+            $owned = $this->countOwnedItems($id);
+            if ($owned > 0 && !$decided) {
+                $this->db->rollBack();
+                return self::fail("This user owns {$owned} item(s). Choose whether to transfer them to another user or make them available to all users before deleting.");
+            }
+            if ($owned > 0) {
+                $this->db->query("UPDATE filesystem SET owner_id = :new_owner WHERE owner_id = :old_owner");
+                $this->db->bind(':new_owner', $newOwnerId);
+                $this->db->bind(':old_owner', $id);
+                $this->db->execute();
+            }
+
+            $this->db->query("DELETE FROM users WHERE id = :id");
+            $this->db->bind(':id', $id);
+            $this->db->execute();
+
+            $this->db->commit();
+        } catch (PDOException $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            error_log('termi-story: deleteUser failed: ' . $e->getMessage());
+            return self::fail('Database error. The user was not deleted.');
+        }
+
+        $message = 'User deleted successfully.';
+        if ($owned > 0) {
+            $message .= $newOwnerId !== null
+                ? " {$owned} item(s) transferred to {$newOwnerName}."
+                : " {$owned} item(s) are now available to all users.";
+        }
+        return ['success' => true, 'message' => $message, 'transferred' => $owned];
     }
 
     // --- Theme Methods ---
@@ -795,42 +878,50 @@ class Admin {
         }
     }
 
-    private function buildPathToIdMap() {
+    /** Full path of every filesystem item, keyed by ID (items in a broken chain are left out). */
+    private function buildPathsById() {
         $this->db->query("SELECT id, parent_id, name FROM filesystem");
-        $items = $this->db->resultSet();
         $itemsById = [];
-        foreach ($items as $item) {
+        foreach ($this->db->resultSet() as $item) {
             $itemsById[(int)$item['id']] = $item;
         }
 
         $paths = [];
-        $build = function ($itemId) use (&$build, &$paths, $itemsById) {
+        $visiting = [];
+        $build = function ($itemId) use (&$build, &$paths, &$visiting, $itemsById) {
             if (isset($paths[$itemId])) {
                 return $paths[$itemId];
             }
-            if (!isset($itemsById[$itemId])) {
-                return null;
+            if (!isset($itemsById[$itemId]) || isset($visiting[$itemId])) {
+                return null; // missing parent, or a parent cycle
             }
             $item = $itemsById[$itemId];
             if ($item['parent_id'] === null) {
-                $paths[$itemId] = '/';
-                return '/';
+                return $paths[$itemId] = '/';
             }
+            $visiting[$itemId] = true;
             $parentPath = $build((int)$item['parent_id']);
+            unset($visiting[$itemId]);
             if ($parentPath === null) {
                 return null;
             }
-            $path = rtrim($parentPath, '/') . '/' . $item['name'];
-            $paths[$itemId] = $path;
-            return $path;
+            return $paths[$itemId] = rtrim($parentPath, '/') . '/' . $item['name'];
         };
 
-        $map = [];
-        foreach ($itemsById as $id => $item) {
+        $result = [];
+        foreach (array_keys($itemsById) as $id) {
             $path = $build($id);
             if ($path !== null) {
-                $map[strtolower($path)] = $id; // DB collation is case-insensitive
+                $result[$id] = $path;
             }
+        }
+        return $result;
+    }
+
+    private function buildPathToIdMap() {
+        $map = [];
+        foreach ($this->buildPathsById() as $id => $path) {
+            $map[strtolower($path)] = $id; // DB collation is case-insensitive
         }
         return $map;
     }

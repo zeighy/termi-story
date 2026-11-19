@@ -71,6 +71,7 @@ foreach ($themeResults as $row) {
                 <ul>
                     <li><b>Add User:</b> Use the form to create a new user.</li>
                     <li><b>Edit/Delete:</b> Use the buttons in the table row. Leaving password blank keeps the current one.</li>
+                    <li><b>Deleting a user who owns files:</b> you must first choose to transfer their files and directories to another user or make them available to all users.</li>
                 </ul>
             </div>
             <div class="help-tab" data-tab="theme" style="display: none;">
@@ -366,6 +367,37 @@ foreach ($themeResults as $row) {
                 </div>
             </form>
             <div id="move-form-response"></div>
+        </div>
+    </div>
+
+    <div id="delete-user-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>Delete User: <span id="delete-user-name"></span></h2>
+            <form id="delete-user-form">
+                <p id="delete-user-summary"></p>
+                <ul id="delete-user-items" class="owned-items"></ul>
+
+                <fieldset id="delete-user-choices" class="transfer-choices">
+                    <legend>What should happen to these files and directories?</legend>
+                    <label class="radio-label">
+                        <input type="radio" name="transfer_mode" value="user" id="transfer-mode-user"> Transfer ownership to:
+                    </label>
+                    <select id="delete-user-transfer-to" disabled>
+                        <option value="">Select a user…</option>
+                    </select>
+                    <small id="delete-user-no-others" style="display: none;">There are no other users to transfer to.</small>
+                    <label class="radio-label">
+                        <input type="radio" name="transfer_mode" value="all" id="transfer-mode-all"> Make them available to all users
+                    </label>
+                </fieldset>
+
+                <p class="danger-note">Deleting a user is permanent.</p>
+                <div class="modal-actions">
+                    <button type="submit" id="confirm-delete-user-btn" class="danger-btn" disabled>Delete User</button>
+                    <button type="button" id="cancel-delete-user-btn" style="background-color: var(--secondary-color);">Cancel</button>
+                </div>
+            </form>
+            <div id="delete-user-response"></div>
         </div>
     </div>
 

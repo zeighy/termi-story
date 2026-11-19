@@ -37,6 +37,7 @@ It's built with PHP and a MySQL database on the back-end, with a dynamic, vanill
 - **Locks:** Give any file, directory or app a lock password (with an optional hint). Players must `unlock` it before they can read a file, `cd` into a directory, or `run` an app. Changing the password locks it again for players who had already unlocked it.
 - **Naming:** Players type names as single words, so item names can't contain spaces or slashes.
 - **Full User Manager:** An interface to add, edit, and delete player accounts.
+- **Deleting users safely:** When you delete a user who owns files or directories, the admin panel lists what they own and asks you to either transfer it all to another user or make it available to all users. The user can't be deleted until you choose.
 - **Branding & Theming:** A theme manager to customize the terminal's title, greetings, MOTD, and color scheme.
 
 

@@ -82,8 +82,12 @@ switch ($action) {
     case 'update_user':
         $response = $admin->updateUser($data);
         break;
+    case 'get_user_ownership':
+        $response = $admin->getUserOwnership($id);
+        break;
     case 'delete_user':
-        $response = $admin->deleteUser($id);
+        // transfer_to: another user's ID, or 'all'. Required when the user owns items.
+        $response = $admin->deleteUser($id, is_array($data) ? ($data['transfer_to'] ?? null) : null);
         break;
     case 'get_users':
         $users = $admin->getAllUsers();

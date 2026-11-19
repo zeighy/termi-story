@@ -229,7 +229,17 @@ $(function () {
             document.getElementById('edit-item-content').value = item.content || '';
         }
         document.getElementById('edit-is-hidden').checked = item.is_hidden == 1;
-        document.getElementById('edit-item-owner').value = item.owner_id ? item.owner_id : 'null';
+        // If the owner account no longer exists, say so instead of silently showing
+        // "All Users" (saving would then quietly make the item public).
+        const ownerSelect = document.getElementById('edit-item-owner');
+        ownerSelect.querySelectorAll('option[data-orphan]').forEach(o => o.remove());
+        const ownerValue = item.owner_id ? String(item.owner_id) : 'null';
+        if (![...ownerSelect.options].some(o => o.value === ownerValue)) {
+            const orphan = new Option(`(deleted user #${ownerValue}) - choose a new owner`, ownerValue);
+            orphan.dataset.orphan = '1';
+            ownerSelect.add(orphan);
+        }
+        ownerSelect.value = ownerValue;
 
         modal.style.display = 'flex';
     }
@@ -316,11 +326,12 @@ $(function () {
                     <td>${escapeHtml(user.username)}</td>
                     <td>
                         <button class="edit-user-btn" data-userid="${user.id}" data-username="${escapeHtml(user.username)}">Edit</button>
-                        <button class="delete-user-btn" data-userid="${user.id}">Delete</button>
+                        <button class="delete-user-btn" data-userid="${user.id}" data-username="${escapeHtml(user.username)}">Delete</button>
                     </td>
                 `;
                 usersTableBody.appendChild(tr);
             });
+            loadUserDropdowns(); // keep the add/edit item owner lists in sync
         }
     }
 
@@ -337,15 +348,119 @@ $(function () {
         }
 
         if (e.target.classList.contains('delete-user-btn')) {
-            const id = e.target.dataset.userid;
-            if (confirm('Are you sure you want to delete this user? This is permanent.')) {
-                const response = await apiRequest('delete_user', { id: id });
-                if(response.success) {
-                    loadUsers();
-                } else {
-                    alert(response.message);
-                }
+            openDeleteUserModal(e.target.dataset.userid, e.target.dataset.username);
+        }
+    });
+
+    // ============================
+    // DELETE USER (with ownership transfer)
+    // ============================
+    // A user who owns files/directories can only be deleted after the admin decides
+    // where those items go: another user, or all users. Confirm stays disabled until then.
+    const deleteUserModal = document.getElementById('delete-user-modal');
+    const deleteUserForm = document.getElementById('delete-user-form');
+    const deleteUserName = document.getElementById('delete-user-name');
+    const deleteUserSummary = document.getElementById('delete-user-summary');
+    const deleteUserItems = document.getElementById('delete-user-items');
+    const deleteUserChoices = document.getElementById('delete-user-choices');
+    const transferModeUser = document.getElementById('transfer-mode-user');
+    const transferModeAll = document.getElementById('transfer-mode-all');
+    const transferToSelect = document.getElementById('delete-user-transfer-to');
+    const noOtherUsersNote = document.getElementById('delete-user-no-others');
+    const confirmDeleteUserBtn = document.getElementById('confirm-delete-user-btn');
+    const deleteUserResponse = document.getElementById('delete-user-response');
+    let deleteUserId = null;
+    let deleteUserNeedsChoice = false;
+
+    // The admin's decision: a user ID, 'all', or null while undecided
+    function selectedTransfer() {
+        if (transferModeAll.checked) return 'all';
+        if (transferModeUser.checked) return transferToSelect.value || null;
+        return null;
+    }
+
+    function updateDeleteUserState() {
+        transferToSelect.disabled = !transferModeUser.checked;
+        confirmDeleteUserBtn.disabled = deleteUserNeedsChoice && selectedTransfer() === null;
+    }
+
+    function closeDeleteUserModal() {
+        deleteUserModal.style.display = 'none';
+        deleteUserId = null;
+    }
+
+    async function openDeleteUserModal(id, username) {
+        deleteUserForm.reset();
+        deleteUserResponse.textContent = '';
+        deleteUserItems.innerHTML = '';
+        confirmDeleteUserBtn.disabled = true;
+
+        const [ownership, users] = await Promise.all([
+            apiRequest('get_user_ownership', { id: id }),
+            apiRequest('get_users')
+        ]);
+        if (!ownership.success) {
+            alert(ownership.message || 'Could not load this user.');
+            return;
+        }
+
+        deleteUserId = id;
+        deleteUserName.textContent = username;
+        const count = ownership.data.count;
+        deleteUserNeedsChoice = count > 0;
+
+        // Other users the files can be transferred to
+        const others = users.success ? users.data.filter(u => String(u.id) !== String(id)) : [];
+        transferToSelect.innerHTML = '';
+        transferToSelect.add(new Option('Select a user…', ''));
+        others.forEach(u => transferToSelect.add(new Option(u.username, u.id)));
+        transferModeUser.disabled = others.length === 0;
+        noOtherUsersNote.style.display = others.length === 0 ? 'block' : 'none';
+
+        if (count === 0) {
+            deleteUserSummary.textContent = `${username} doesn't own any files or directories.`;
+            deleteUserChoices.style.display = 'none';
+        } else {
+            deleteUserSummary.textContent = `${username} owns ${count} item${count === 1 ? '' : 's'}:`;
+            ownership.data.items.forEach(path => {
+                const li = document.createElement('li');
+                li.textContent = path;
+                deleteUserItems.appendChild(li);
+            });
+            if (count > ownership.data.items.length) {
+                const li = document.createElement('li');
+                li.textContent = `…and ${count - ownership.data.items.length} more`;
+                deleteUserItems.appendChild(li);
             }
+            deleteUserChoices.style.display = 'block';
+        }
+
+        updateDeleteUserState();
+        deleteUserModal.style.display = 'flex';
+    }
+
+    [transferModeUser, transferModeAll, transferToSelect].forEach(el => el.addEventListener('change', updateDeleteUserState));
+    document.getElementById('cancel-delete-user-btn').addEventListener('click', closeDeleteUserModal);
+
+    deleteUserForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const transferTo = selectedTransfer();
+        if (deleteUserId === null || (deleteUserNeedsChoice && transferTo === null)) {
+            return; // no decision yet
+        }
+        confirmDeleteUserBtn.disabled = true;
+        const data = transferTo !== null ? { transfer_to: transferTo } : {};
+        const response = await apiRequest('delete_user', { id: deleteUserId, data: data });
+        if (response.success) {
+            closeDeleteUserModal();
+            userFormResponse.style.color = 'green';
+            userFormResponse.textContent = response.message;
+            setTimeout(() => { userFormResponse.textContent = ''; }, 4000);
+            loadUsers();
+        } else {
+            deleteUserResponse.style.color = 'red';
+            deleteUserResponse.textContent = response.message || 'Could not delete the user.';
+            updateDeleteUserState();
         }
     });
 
