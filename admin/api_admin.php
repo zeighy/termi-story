@@ -56,7 +56,7 @@ switch ($action) {
         $response = $admin->addItem($data);
         break;
     case 'get_item':
-        $item = $admin->getItem($id);
+        $item = $admin->getItemForEditor($id);
         if ($item) {
             echo json_encode($item);
             exit();

@@ -19,8 +19,10 @@ class Admin {
             $tree[] = [
                 'id' => (string)$item['id'],
                 'parent' => $item['parent_id'] === null ? '#' : (string)$item['parent_id'],
-                'text' => htmlspecialchars($item['name']),
-                'type' => $item['type']
+                // jstree renders 'text' as HTML, so it is escaped; use data.name wherever plain text is needed
+                'text' => htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'),
+                'type' => $item['type'],
+                'data' => ['name' => $item['name']],
             ];
         }
         
@@ -31,6 +33,35 @@ class Admin {
         $this->db->query("SELECT * FROM filesystem WHERE id = :id");
         $this->db->bind(':id', $id);
         return $this->db->single();
+    }
+
+    // --- Content encoding ---
+    // txt/app content is stored HTML-encoded exactly once. Encode on save; decode
+    // before showing it in the editor, displaying it to players, or running a script.
+
+    public static function encodeContent($raw) {
+        return htmlspecialchars((string)$raw, ENT_QUOTES, 'UTF-8');
+    }
+
+    public static function decodeContent($stored) {
+        return htmlspecialchars_decode((string)$stored, ENT_QUOTES);
+    }
+
+    /**
+     * An item as the admin editor needs it: txt/app content decoded to the text the
+     * author wrote (so saving it again doesn't double-encode), and no password hash.
+     */
+    public function getItemForEditor($id) {
+        $item = $this->getItem($id);
+        if (!$item) {
+            return false;
+        }
+        if ($item['type'] === 'txt' || $item['type'] === 'app') {
+            $item['content'] = self::decodeContent($item['content']);
+        }
+        $item['has_password'] = !empty($item['password']);
+        unset($item['password']);
+        return $item;
     }
 
     public function addItem($data) {
@@ -60,7 +91,7 @@ class Admin {
         if ($data['type'] === 'img') {
             $content = ($data['image_width'] ?? '') . ';' . ($data['image_content'] ?? '');
         } else {
-            $content = ($data['type'] !== 'dir') ? htmlspecialchars($data['content'] ?? '', ENT_QUOTES, 'UTF-8') : null;
+            $content = ($data['type'] !== 'dir') ? self::encodeContent($data['content'] ?? '') : null;
         }
         $this->db->bind(':content', $content);
         $this->db->bind(':password', $password);
@@ -125,7 +156,7 @@ class Admin {
                 $content = $item['content'];
             }
         } else {
-            $content = ($item['type'] !== 'dir') ? htmlspecialchars($data['content'] ?? '', ENT_QUOTES, 'UTF-8') : null;
+            $content = ($item['type'] !== 'dir') ? self::encodeContent($data['content'] ?? '') : null;
         }
         $this->db->bind(':content', $content);
         $this->db->bind(':password', $password);

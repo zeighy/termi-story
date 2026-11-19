@@ -76,7 +76,8 @@ if ($action === 'login') {
         unset($_SESSION['run_input']);
 
         $response['success'] = true;
-        $response['output'] = "Login successful. Welcome, " . htmlspecialchars($user['username']) . ".";
+        // Plain text: the client escapes all output (see Terminal.php)
+        $response['output'] = "Login successful. Welcome, " . $user['username'] . ".";
 
         // Add a flag to tell the front-end if this is the first login
         if (empty($_SESSION['env_vars']['SESS_INIT'])) {
@@ -123,24 +124,11 @@ if ($action === 'login') {
 
 } elseif (isset($_SESSION['user_id'])) {
     $terminal = new Terminal($db, $_SESSION['user_id'], $_SESSION['current_directory_id']);
-    $commandParts = explode(' ', $commandStr);
-    $baseCommand = strtolower($commandParts[0]);
-
-    if (empty($commandStr)) {
+    if (trim($commandStr) === '') {
         $response['output'] = '';
     } else {
+        // Terminal returns plain-text output and picks its own animation
         $response = $terminal->executeCommand($commandStr);
-
-        if (($baseCommand === 'unlock' || $baseCommand === 'run' || $baseCommand === 'reset') &&
-            !str_contains(strtolower($response['output']), 'usage:') &&
-            !str_contains(strtolower($response['output']), 'access denied') &&
-            !str_contains(strtolower($response['output']), 'no such'))
-        {
-            $response['animation'] = 'typewriter';
-        }
-        elseif ($baseCommand === 'cat' && !empty($response['output']) && !str_contains(strtolower($response['output']), 'usage:')) {
-             $response['animation'] = 'typewriterChunk';
-        }
     }
 
     $response['path'] = $terminal->getCurrentPath();

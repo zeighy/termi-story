@@ -101,9 +101,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.innerText = text;
-        return div.innerHTML;
+        return String(text ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     // Start it
@@ -317,8 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await response.json();
         
         if (data.success) {
-            // The MOTD is admin/import supplied text; render it as text, not HTML
-            displayOutput(data.output + "\n\n" + escapeHtml(motd));
+            displayText(data.output + "\n\n" + motd);
             terminalState = 'active';
             await processCommand('');
 
@@ -326,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await simulateCommand('run init.app');
             }
         } else {
-            displayOutput(data.output);
+            displayText(data.output);
             promptLabel.textContent = 'Username:';
             terminalState = 'login-username';
         }
@@ -358,9 +360,15 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
     }
 
-    function displayOutput(output) {
+    // Server output is plain text unless the response says format: 'html' (only ls does).
+    function displayText(text) {
+        displayHtml(escapeHtml(text));
+    }
+
+    // Only for trusted markup: the server's escaped ls listing, or HTML built here from escaped parts.
+    function displayHtml(html) {
         const outputLine = document.createElement('div');
-        outputLine.innerHTML = output.replace(/\n/g, '<br>');
+        outputLine.innerHTML = String(html).replace(/\n/g, '<br>');
         terminalOutput.appendChild(outputLine);
         scrollToBottom();
     }
@@ -380,17 +388,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 await typewriterChunkEffect(data.output);
             } else if (data.animation === 'imageRender') {
                 await renderImageProgressive(data.output);
+            } else if (data.format === 'html') {
+                displayHtml(data.output);
             } else {
-                displayOutput(data.output);
+                displayText(data.output);
             }
         }
         if (data.path && data.username) {
             const userColor = getComputedStyle(document.documentElement).getPropertyValue('--prompt-user-color').trim();
             const pathColor = getComputedStyle(document.documentElement).getPropertyValue('--prompt-path-color').trim();
-            promptLabel.innerHTML = `<span style="color: ${userColor};">${data.username}</span>@term:<span style="color: ${pathColor};">${data.path}</span>$ `;
+            promptLabel.innerHTML = `<span style="color: ${escapeHtml(userColor)};">${escapeHtml(data.username)}</span>@term:<span style="color: ${escapeHtml(pathColor)};">${escapeHtml(data.path)}</span>$ `;
         }
         if (data.error) {
-            displayOutput(`<span style="color: red;">${data.error}</span>`);
+            displayHtml(`<span style="color: red;">${escapeHtml(data.error)}</span>`);
         }
         scrollToBottom();
     }
@@ -422,7 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise(resolve => {
             const parts = dataString.split(';');
             if (parts.length < 2) {
-                displayOutput("Error parsing image data.");
+                displayText("Error parsing image data.");
                 resolve();
                 return;
             }
@@ -431,7 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const pixelData = parts[1];
 
             if (isNaN(width) || width <= 0) {
-                displayOutput("Invalid image dimensions.");
+                displayText("Invalid image dimensions.");
                 resolve();
                 return;
             }

@@ -42,6 +42,7 @@ It's built with PHP and a MySQL database on the back-end, with a dynamic, vanill
 
 - The **Story** tab in the admin panel can export the full virtual filesystem (and theme) to a JSON file, and import it back in **merge** or **replace** mode.
 - File lock passwords are exported as hashes (not plaintext). Owners are matched by username on import.
+- Text and script content is exported as stored, which is HTML-encoded once (e.g. `&quot;` for `"`). If you hand-edit an export, keep that encoding.
 - A command-line exporter still lives at `config/export_story.php` for text dumps; the admin JSON format is preferred for round-trips between installs.
 
 **File Structure**
@@ -84,6 +85,8 @@ Credentials are never stored in tracked files. Set them up like this:
 Alternatively, set the environment variables `TERMI_DB_HOST`, `TERMI_DB_USER`, `TERMI_DB_PASS`, `TERMI_DB_NAME`, `TERMI_ADMIN_USERNAME` and `TERMI_ADMIN_PASSWORD_HASH`. Values in `config.local.php` take precedence over environment variables.
 
 > **Upgrading from an older version:** earlier versions kept credentials in `config/database.php` and the admin hash in `admin/auth.php`. Move those values into `config/config.local.php`, then discard your local edits to those two files before pulling.
+
+> **Repairing text from older versions:** earlier versions of the admin editor re-encoded text every time a file was saved, so characters like `'`, `"` and `&` could gradually turn into `&#039;`, `&amp;quot;` and so on. Text files and scripts are now encoded exactly once when saved, decoded when shown in the editor or to players, and decoded before a script runs. To clean up content that was already affected, preview the changes with `php config/repair_double_encoding.php`, then run it again with `--apply`.
 
 **Securing the Document Root**
 

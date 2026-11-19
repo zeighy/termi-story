@@ -143,7 +143,7 @@ $(function () {
                     'delete': {
                         'label': 'Delete',
                         'action': function () {
-                            triggerDelete(node.id, node.text);
+                            triggerDelete(node.id, nodeName(node));
                         }
                     }
                 };
@@ -160,13 +160,13 @@ $(function () {
         const node = data.node;
         if (node.type === 'dir') {
             parentIdInput.value = node.id;
-            selectedDirName.textContent = node.text;
+            selectedDirName.textContent = nodeName(node);
             renderMainView(node.id); // Call render on directory select
         } else {
             // If a file is selected, set the parent to the file's parent
             parentIdInput.value = node.parent;
             const parentNode = $('#fs-tree').jstree(true).get_node(node.parent);
-            selectedDirName.textContent = parentNode ? parentNode.text : '/';
+            selectedDirName.textContent = parentNode ? nodeName(parentNode) : '/';
             renderMainView(node.parent); // Render parent dir if file selected
         }
 
@@ -539,10 +539,10 @@ async function renderMainView(directoryId) {
                     const itemEl = document.createElement('div');
                     itemEl.className = 'fs-item ' + (isDir ? 'dir' : 'file');
                     itemEl.dataset.id = item.id;
-                    itemEl.dataset.name = item.text;
+                    itemEl.dataset.name = nodeName(item);
                     itemEl.innerHTML = `
                         <div class="fs-item-icon">${iconChar}</div>
-                        <div class="fs-item-name">${escapeHtml(item.text)}</div>
+                        <div class="fs-item-name">${escapeHtml(nodeName(item))}</div>
                     `;
 
                     itemEl.addEventListener('click', (e) => {
@@ -556,7 +556,7 @@ async function renderMainView(directoryId) {
 
                         itemEl.classList.add('selected');
                         selectedFileId = item.id;
-                        selectedFileName = item.text;
+                        selectedFileName = nodeName(item);
 
                         document.getElementById('fs-main-actions').style.display = 'flex';
                     });
@@ -662,7 +662,7 @@ document.getElementById('main-move-btn').addEventListener('click', async (e) => 
         });
 
         function sortNodes(nodes) {
-            nodes.sort((a, b) => a.text.localeCompare(b.text));
+            nodes.sort((a, b) => nodeName(a).localeCompare(nodeName(b)));
             nodes.forEach(node => {
                 if (node.children.length > 0) {
                     sortNodes(node.children);
@@ -677,7 +677,7 @@ document.getElementById('main-move-btn').addEventListener('click', async (e) => 
                     const option = document.createElement('option');
                     option.value = node.id;
                     const prefix = '> '.repeat(level);
-                    option.textContent = prefix + (node.id.toString() === '1' && node.text === '/' ? '/' : node.text);
+                    option.textContent = prefix + nodeName(node);
                     select.appendChild(option);
                 }
                 populateSelect(node.children, level + 1);
@@ -773,7 +773,12 @@ async function triggerPreview(id) {
             previewContent.innerHTML = `<em>[Invalid Image Format]</em>`;
         }
     } else {
-        previewContent.innerText = item.content || '<em>[Empty File]</em>';
+        // Content arrives decoded (plain text) from get_item, so show it as text
+        if (item.content) {
+            previewContent.innerText = item.content;
+        } else {
+            previewContent.innerHTML = '<em>[Empty File]</em>';
+        }
     }
 
     previewEditBtn.onclick = () => {
@@ -885,6 +890,16 @@ function triggerDelete(id, name) {
 
 
 // Helper functions for path building (Assuming data is flat array with .id and .parent)
+
+// A tree item's plain-text name. 'text' is HTML-escaped for jstree, so display code
+// (textContent, escapeHtml, confirm dialogs) must use the raw name in data.name.
+function nodeName(node) {
+    if (node && node.data && typeof node.data.name === 'string') {
+        return node.data.name;
+    }
+    return node ? String(node.text ?? '') : '';
+}
+
 function findNodeInTree(data, id) {
     return data.find(item => item.id.toString() === id.toString());
 }
@@ -892,8 +907,9 @@ function findNodeInTree(data, id) {
 function buildPath(data, id) {
     let path = [];
     let current = findNodeInTree(data, id);
-    while (current && current.id !== '#') {
-        path.unshift(current.text);
+    // Stop at the root (parent '#'); its own name is the leading '/'
+    while (current && current.id !== '#' && current.parent !== '#') {
+        path.unshift(nodeName(current));
         current = findNodeInTree(data, current.parent);
     }
     return '/' + path.join('/');

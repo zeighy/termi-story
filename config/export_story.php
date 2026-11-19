@@ -63,6 +63,14 @@ foreach ($items as $item) {
     getPath($item['id'], $itemsById);
 }
 
+// txt/app content is stored HTML-encoded; write it out as the author wrote it
+function readableContent($item) {
+    if ($item['type'] === 'txt' || $item['type'] === 'app') {
+        return htmlspecialchars_decode((string)$item['content'], ENT_QUOTES);
+    }
+    return (string)$item['content'];
+}
+
 // --- Export Logic ---
 echo "WARNING: This process may take a long time depending on the amount of data.\n";
 sleep(2); // Give user a moment to read the warning
@@ -83,7 +91,7 @@ if (isset($options['single'])) {
             $fileContent .= "PROTECTED: Yes (Hint: " . ($item['password_hint'] ?? 'No hint') . ")\n";
         }
         $fileContent .= str_repeat("-", 80) . "\n";
-        $fileContent .= $item['content'] . "\n\n";
+        $fileContent .= readableContent($item) . "\n\n";
     }
 
     file_put_contents($filename, $fileContent);
@@ -109,7 +117,7 @@ if (isset($options['individual'])) {
                 mkdir($targetPath, 0755, true);
             }
         } else {
-            file_put_contents($targetPath, $item['content']);
+            file_put_contents($targetPath, readableContent($item));
         }
     }
     echo "Successfully exported all content to the '{$dirname}' directory.\n";
