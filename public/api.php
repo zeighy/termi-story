@@ -2,6 +2,7 @@
 require_once '../src/Security.php';
 require_once '../src/RateLimiter.php';
 Security::startSession(Security::PLAYER_SESSION_NAME);
+Security::sendSecurityHeaders(true);
 Security::handleUncaughtAsJson();
 header('Content-Type: application/json');
 

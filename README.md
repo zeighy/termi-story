@@ -81,10 +81,10 @@ To run this application, your web server must have the following:
 Credentials are never stored in tracked files. Set them up like this:
 
 1. Copy `config/config.local.example.php` to `config/config.local.php`. This file is gitignored.
-2. Fill in your database settings (`DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`).
+2. Fill in your database settings (`DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`, and optionally `DB_PORT` for a non-standard port).
 3. Generate an admin password hash with `php config/hash_password.php 'your-long-unique-password'` and paste it into `ADMIN_PASSWORD_HASH`. Keep the single quotes, because the hash contains `$` characters. **Admin login stays disabled until a hash is set.**
 
-Alternatively, set the environment variables `TERMI_DB_HOST`, `TERMI_DB_USER`, `TERMI_DB_PASS`, `TERMI_DB_NAME`, `TERMI_ADMIN_USERNAME` and `TERMI_ADMIN_PASSWORD_HASH`. Values in `config.local.php` take precedence over environment variables.
+Alternatively, set the environment variables `TERMI_DB_HOST`, `TERMI_DB_PORT`, `TERMI_DB_USER`, `TERMI_DB_PASS`, `TERMI_DB_NAME`, `TERMI_ADMIN_USERNAME` and `TERMI_ADMIN_PASSWORD_HASH`. Values in `config.local.php` take precedence over environment variables.
 
 > **Upgrading from an older version:** earlier versions kept credentials in `config/database.php` and the admin hash in `admin/auth.php`. Move those values into `config/config.local.php`, then discard your local edits to those two files before pulling.
 

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../src/Security.php';
 require_once __DIR__ . '/../config/database.php';
 Security::startSession(Security::ADMIN_SESSION_NAME);
+Security::sendSecurityHeaders(false);
 // If already logged in, redirect to the main admin page
 if (isset($_SESSION['is_admin_logged_in']) && $_SESSION['is_admin_logged_in'] === true) {
     header('Location: index.php');

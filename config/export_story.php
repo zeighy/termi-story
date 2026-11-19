@@ -1,9 +1,8 @@
 <?php
 // export_story.php - A command-line utility to export your Termi-Story content.
-// Place this file in the root directory of your project.
-// Usage from your terminal:
-//   php export_story.php --single=my_story.txt
-//   php export_story.php --individual=my_story_folder
+// Usage from your terminal (works from any directory; output paths are relative to where you run it):
+//   php config/export_story.php --single=my_story.txt
+//   php config/export_story.php --individual=my_story_folder
 
 // --- Environment Setup ---
 // Ensure this script is run from the command line, not a web browser.
@@ -13,8 +12,8 @@ if (PHP_SAPI !== 'cli') {
 }
 
 // Include necessary files
-require_once './config/database.php';
-require_once './src/Database.php';
+require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/../src/Database.php';
 
 // --- Argument Parsing ---
 $options = getopt("", ["single::", "individual::"]);
@@ -22,8 +21,8 @@ $options = getopt("", ["single::", "individual::"]);
 if (empty($options)) {
     echo "Termi-Story Exporter\n";
     echo "Usage:\n";
-    echo "  php export_story.php --single[=filename.txt]    Export all content to a single text file.\n";
-    echo "  php export_story.php --individual[=directory]   Export content to individual files in a directory structure.\n";
+    echo "  php config/export_story.php --single[=filename.txt]    Export all content to a single text file.\n";
+    echo "  php config/export_story.php --individual[=directory]   Export content to individual files in a directory structure.\n";
     exit;
 }
 

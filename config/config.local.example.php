@@ -5,6 +5,7 @@
 
 // --- Database ---
 define('DB_HOST', 'localhost');
+// define('DB_PORT', 3306); // only needed for a non-standard port
 define('DB_USER', 'termidb');
 define('DB_PASS', 'change-me');
 define('DB_NAME', 'termidb');

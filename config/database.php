@@ -4,7 +4,7 @@
 //
 // Put your real settings in config/config.local.php (copy config.local.example.php;
 // it is gitignored), or provide them as environment variables:
-//   TERMI_DB_HOST, TERMI_DB_USER, TERMI_DB_PASS, TERMI_DB_NAME,
+//   TERMI_DB_HOST, TERMI_DB_PORT, TERMI_DB_USER, TERMI_DB_PASS, TERMI_DB_NAME,
 //   TERMI_ADMIN_USERNAME, TERMI_ADMIN_PASSWORD_HASH
 // Values in config.local.php take precedence over environment variables.
 
@@ -21,6 +21,7 @@ defined('DB_HOST') || define('DB_HOST', $termiEnv('TERMI_DB_HOST', 'localhost'))
 defined('DB_USER') || define('DB_USER', $termiEnv('TERMI_DB_USER'));
 defined('DB_PASS') || define('DB_PASS', $termiEnv('TERMI_DB_PASS'));
 defined('DB_NAME') || define('DB_NAME', $termiEnv('TERMI_DB_NAME'));
+defined('DB_PORT') || define('DB_PORT', (int)$termiEnv('TERMI_DB_PORT', '0')); // 0 = driver default (3306)
 
 // Admin panel login. Generate the hash with: php config/hash_password.php 'your-password'
 // Admin login stays disabled until a hash is configured.

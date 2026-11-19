@@ -243,9 +243,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     } else {
                         await processCommand(command);
-                        if (baseCommand === 'cd') {
-                            await processCommand('');
-                        }
                         if (baseCommand === 'reset') {
                             await simulateCommand('run init.app');
                         }
@@ -379,6 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Only for trusted markup: the server's escaped ls listing, or HTML built here from escaped parts.
     function displayHtml(html) {
         const outputLine = document.createElement('div');
+        outputLine.classList.add('output-line'); // white-space: pre-wrap, like animated output
         outputLine.innerHTML = String(html).replace(/\n/g, '<br>');
         terminalOutput.appendChild(outputLine);
         scrollToBottom();
@@ -450,7 +448,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const width = parseInt(parts[0], 10);
             const pixelData = parts[1];
 
-            if (isNaN(width) || width <= 0) {
+            // Reject absurd sizes (e.g. from a hand-edited import) that would hang the browser
+            if (isNaN(width) || width <= 0 || width > 4096 || pixelData.length / width > 4096) {
                 displayText("Invalid image dimensions.");
                 resolve();
                 return;

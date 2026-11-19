@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/Security.php';
 Security::startSession(Security::ADMIN_SESSION_NAME);
+Security::sendSecurityHeaders(false);
 
 if (!isset($_SESSION['is_admin_logged_in']) || $_SESSION['is_admin_logged_in'] !== true) {
     header('Location: login.php');
@@ -26,7 +27,7 @@ foreach ($themeResults as $row) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?php echo htmlspecialchars($csrfToken); ?>">
     <title>Admin Panel - Filesystem</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" integrity="sha384-5BJyHQxjYGbDVZGcamhOsAONslKY8cIDK03gh3J/mgzCI10yZgJVPrr9pwXkzBAU" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="assets/admin.css">
     <style>
         :root {
@@ -368,8 +369,8 @@ foreach ($themeResults as $row) {
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js" integrity="sha384-rCrHshtE6GZUAsykqKBcqaLf4HE5eClDpD23L6y6S2qMwMeirMo1sp8YWDAMnBPT" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="assets/admin.js"></script>
     <script>
         // Simple accordion for help

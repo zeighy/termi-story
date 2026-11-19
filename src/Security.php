@@ -67,6 +67,22 @@ class Security {
         return strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
     }
 
+    /**
+     * Baseline response headers. Admin pages also refuse to be framed (clickjacking);
+     * the player terminal may be framed, since embedding the game elsewhere is a valid use.
+     */
+    public static function sendSecurityHeaders($allowFraming) {
+        if (headers_sent()) {
+            return;
+        }
+        header('X-Content-Type-Options: nosniff');
+        header('Referrer-Policy: same-origin');
+        if (!$allowFraming) {
+            header('X-Frame-Options: DENY');
+            header("Content-Security-Policy: frame-ancestors 'none'");
+        }
+    }
+
     // --- CSRF ---
 
     public static function csrfToken() {

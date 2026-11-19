@@ -107,6 +107,12 @@ class Terminal {
         return true;
     }
 
+    /** Move the player, keeping the session and this object in sync so the returned path is current. */
+    private function changeDirectory($dirId) {
+        $this->currentDirId = (int)$dirId;
+        $_SESSION['current_directory_id'] = (int)$dirId;
+    }
+
     public function executeCommand($commandStr) {
         $parts = preg_split('/\s+/', $commandStr, -1, PREG_SPLIT_NO_EMPTY);
         $command = strtolower((string)array_shift($parts));
@@ -128,7 +134,7 @@ class Terminal {
             case 'reset':
                 return $this->_commandReset();
             case 'help':
-                return $this->text("Available commands:\n  ls       - List files\n  cd       - Change directory\n  cat      - Read file\n  view     - View an image file\n  run      - Execute a script file\n  unlock   - Unlock a protected file\n  reset    - Reset your game progress\n  clear    - Clear screen");
+                return $this->text("Available commands:\n  ls       - List files\n  cd       - Change directory\n  cat      - Read file\n  view     - View an image file\n  run      - Execute a script file\n  unlock   - Unlock a protected file\n  reset    - Reset your game progress\n  clear    - Clear screen\n  logout   - Log out");
             default:
                 return $this->text("invalid command");
         }
@@ -143,7 +149,7 @@ class Terminal {
     }
 
     private function _commandLs() {
-        $this->db->query("SELECT name, type FROM filesystem WHERE parent_id = :currentDirId AND is_hidden = 0");
+        $this->db->query("SELECT name, type FROM filesystem WHERE parent_id = :currentDirId AND is_hidden = 0 ORDER BY type = 'dir' DESC, name");
         $this->db->bind(':currentDirId', $this->currentDirId);
         $items = $this->db->resultSet();
 
@@ -215,7 +221,7 @@ class Terminal {
         $targetDirName = $args[0];
 
         if ($targetDirName === '/') {
-            $_SESSION['current_directory_id'] = 1;
+            $this->changeDirectory(1);
             return $this->text('');
         }
 
@@ -227,7 +233,7 @@ class Terminal {
             $this->db->bind(':currentDirId', $this->currentDirId);
             $current = $this->db->single();
             if ($current && $current['parent_id'] !== null) {
-                $_SESSION['current_directory_id'] = $current['parent_id'];
+                $this->changeDirectory($current['parent_id']);
             }
         } else {
             $this->db->query("SELECT id, type, owner_id, password, password_hint FROM filesystem WHERE parent_id = :currentDirId AND name = :name AND type = 'dir'");
@@ -242,7 +248,7 @@ class Terminal {
                 if ($this->isLocked($target)) {
                     return $this->lockedMessage($target, $targetDirName);
                 }
-                $_SESSION['current_directory_id'] = $target['id'];
+                $this->changeDirectory($target['id']);
             } else {
                 return $this->text("cd: {$targetDirName}: No such directory");
             }

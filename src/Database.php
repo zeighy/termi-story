@@ -13,7 +13,9 @@ class Database {
 
     public function __construct() {
         // Add charset=utf8mb4 to the connection string
-        $dsn = 'mysql:host=' . $this->host . ';dbname=' . $this->dbname . ';charset=utf8mb4';
+        $dsn = 'mysql:host=' . $this->host
+            . ((defined('DB_PORT') && DB_PORT) ? ';port=' . (int)DB_PORT : '')
+            . ';dbname=' . $this->dbname . ';charset=utf8mb4';
         $options = [
             PDO::ATTR_PERSISTENT => true,
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,

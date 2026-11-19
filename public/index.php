@@ -1,6 +1,7 @@
 <?php
 require_once '../src/Security.php';
 Security::startSession(Security::PLAYER_SESSION_NAME);
+Security::sendSecurityHeaders(true);
 
 // Fetch theme settings from the database
 require_once '../config/database.php';

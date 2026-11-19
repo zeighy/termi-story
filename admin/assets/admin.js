@@ -192,6 +192,7 @@ $(function () {
             const response = await apiRequest('add_item', { data: data });
             handleFormResponse(response, addFormResponse, () => {
                 $('#fs-tree').jstree(true).refresh();
+                renderMainView(currentDirectoryId); // show the new item in the grid
                 addItemForm.reset();
                 const addPreview = document.getElementById('image-preview');
                 if (addPreview) addPreview.style.display = 'none';
@@ -205,7 +206,7 @@ $(function () {
 
     async function openEditModal(id) {
         const item = await apiRequest('get_item', { id: id });
-        if (!item) {
+        if (!item || item.success === false) {
             alert('Could not fetch item details.');
             return;
         }
@@ -252,6 +253,7 @@ $(function () {
         const response = await apiRequest('update_item', { data: data });
         handleFormResponse(response, editFormResponse, () => {
             $('#fs-tree').jstree(true).refresh();
+            renderMainView(currentDirectoryId); // reflect renames in the grid
             closeEditModal();
         });
     });
@@ -507,8 +509,10 @@ $(function () {
 
 let selectedFileId = null;
 let selectedFileName = null;
+let currentDirectoryId = '1'; // directory shown in the main view
 
 async function renderMainView(directoryId) {
+    currentDirectoryId = String(directoryId);
     const mainView = document.getElementById('fs-main-view');
     const currentPathEl = document.getElementById('fs-current-path');
 
@@ -722,7 +726,7 @@ if (moveForm) {
 
 async function triggerPreview(id) {
     const item = await apiRequest('get_item', { id: id });
-    if (!item) {
+    if (!item || item.success === false) {
         alert('Could not fetch item details.');
         return;
     }
@@ -740,7 +744,7 @@ async function triggerPreview(id) {
         if (parts.length >= 2) {
             const width = parseInt(parts[0], 10);
             const pixelData = parts[1];
-            if (!isNaN(width) && width > 0) {
+            if (!isNaN(width) && width > 0 && width <= 4096 && pixelData.length / width <= 4096) {
                 const height = Math.ceil(pixelData.length / width);
 
                 // Clear content and append canvas

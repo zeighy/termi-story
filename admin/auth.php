@@ -4,6 +4,7 @@ require_once __DIR__ . '/../src/RateLimiter.php';
 // Provides ADMIN_USERNAME and ADMIN_PASSWORD_HASH from config/config.local.php or the environment
 require_once __DIR__ . '/../config/database.php';
 Security::startSession(Security::ADMIN_SESSION_NAME);
+Security::sendSecurityHeaders(false);
 
 // Failed admin logins allowed per IP before a cooldown
 const ADMIN_LOGIN_MAX_FAILURES = 5;
