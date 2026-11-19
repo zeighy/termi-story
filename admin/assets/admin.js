@@ -182,7 +182,7 @@ $(function () {
             const type = this.value;
             addContentWrapper.style.display = (type === 'txt' || type === 'app') ? 'block' : 'none';
             document.getElementById('image-upload-wrapper').style.display = (type === 'img') ? 'block' : 'none';
-            addPasswordWrapper.style.display = (type === 'txt' || type === 'img') ? 'block' : 'none';
+            addPasswordWrapper.style.display = 'block'; // any item type can be locked
         });
 
         addItemForm.addEventListener('submit', async function (e) {
@@ -216,7 +216,13 @@ $(function () {
         const isDir = item.type === 'dir';
         document.getElementById('edit-content-wrapper').style.display = (item.type === 'txt' || item.type === 'app') ? 'block' : 'none';
         document.getElementById('edit-image-upload-wrapper').style.display = (item.type === 'img') ? 'block' : 'none';
-        document.getElementById('edit-password-wrapper').style.display = (item.type === 'txt' || item.type === 'img') ? 'block' : 'none';
+        // Any item type can be locked. Show the current lock state and keep its hint.
+        document.getElementById('edit-password-wrapper').style.display = 'block';
+        document.getElementById('edit-item-password').value = '';
+        document.getElementById('edit-item-hint').value = item.password_hint || '';
+        document.getElementById('edit-remove-password').checked = false;
+        document.getElementById('edit-lock-status').style.display = item.has_password ? 'block' : 'none';
+        document.getElementById('edit-remove-lock-label').style.display = item.has_password ? 'flex' : 'none';
 
         if (!isDir) {
             document.getElementById('edit-item-content').value = item.content || '';

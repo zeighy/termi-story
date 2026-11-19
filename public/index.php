@@ -22,10 +22,10 @@ foreach ($themeResults as $row) {
     <link rel="stylesheet" href="terminal.css">
     <style>
         :root {
-            --background-color: <?php echo htmlspecialchars($theme['background_color'] ?? '#1a1a1a'); ?>;
-            --text-color: <?php echo htmlspecialchars($theme['text_color'] ?? '#00ff00'); ?>;
-            --prompt-user-color: <?php echo htmlspecialchars($theme['prompt_color_user'] ?? '#50fa7b'); ?>;
-            --prompt-path-color: <?php echo htmlspecialchars($theme['prompt_color_path'] ?? '#bd93f9'); ?>;
+            --background-color: <?php echo Security::safeColor($theme['background_color'] ?? null, '#1a1a1a'); ?>;
+            --text-color: <?php echo Security::safeColor($theme['text_color'] ?? null, '#00ff00'); ?>;
+            --prompt-user-color: <?php echo Security::safeColor($theme['prompt_color_user'] ?? null, '#50fa7b'); ?>;
+            --prompt-path-color: <?php echo Security::safeColor($theme['prompt_color_path'] ?? null, '#bd93f9'); ?>;
         }
     </style>
 </head>

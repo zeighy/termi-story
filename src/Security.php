@@ -107,6 +107,39 @@ class Security {
         return $contentType === 'application/json';
     }
 
+    /**
+     * For JSON endpoints: turn any uncaught error into a generic JSON error response.
+     * Details go to the server log, never to the client.
+     */
+    public static function handleUncaughtAsJson() {
+        set_exception_handler(function ($e) {
+            error_log('termi-story: uncaught ' . get_class($e) . ': ' . $e->getMessage()
+                . ' in ' . $e->getFile() . ':' . $e->getLine());
+            if (!headers_sent()) {
+                http_response_code(500);
+                header('Content-Type: application/json');
+            }
+            echo json_encode([
+                'success' => false,
+                'error' => 'Server error. Please try again.',
+                'message' => 'Server error. Please try again.',
+            ]);
+        });
+    }
+
+    // --- Output helpers ---
+
+    /** True for #rgb, #rgba, #rrggbb or #rrggbbaa. */
+    public static function isHexColor($value) {
+        return is_string($value)
+            && preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $value) === 1;
+    }
+
+    /** A colour that is safe to write into CSS, falling back to $default for anything else. */
+    public static function safeColor($value, $default) {
+        return self::isHexColor($value) ? $value : $default;
+    }
+
     /** The client address used for rate limiting. Proxy headers are deliberately not trusted. */
     public static function clientIp() {
         return (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');

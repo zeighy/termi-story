@@ -2,6 +2,7 @@
 require_once '../src/Security.php';
 require_once '../src/RateLimiter.php';
 Security::startSession(Security::PLAYER_SESSION_NAME);
+Security::handleUncaughtAsJson();
 header('Content-Type: application/json');
 
 // The terminal only ever sends JSON POSTs. Rejecting anything else blocks
@@ -22,6 +23,21 @@ const LOGIN_MAX_FAILURES_PER_USER = 5;
 const LOGIN_MAX_FAILURES_PER_IP = 50;
 // Verified against when the username does not exist, so response time doesn't reveal valid usernames.
 const DUMMY_PASSWORD_HASH = '$argon2id$v=19$m=65536,t=4,p=1$RHpxNm1BbUJFUVRicVR6ag$tXBjF+n+jFo4Lukx+0rH/hA2Mwcx/4GILEVMsbKhT3o';
+
+/**
+ * Re-check the logged-in player's account on each request: returns false if it was
+ * deleted, and picks up a username change made in the admin panel.
+ */
+function refreshPlayerSession($db) {
+    $db->query("SELECT id, username FROM users WHERE id = :id");
+    $db->bind(':id', (int)$_SESSION['user_id']);
+    $user = $db->single();
+    if (!$user) {
+        return false;
+    }
+    $_SESSION['username'] = $user['username'];
+    return true;
+}
 
 $db = new Database();
 $response = [];
@@ -96,7 +112,12 @@ if ($action === 'login') {
     Security::destroySession();
     $response['success'] = true;
 
-} elseif ($action === 'autocomplete' && isset($_SESSION['user_id'])) {
+} elseif (isset($_SESSION['user_id']) && !refreshPlayerSession($db)) {
+    // The account was deleted while this player was logged in
+    Security::destroySession();
+    $response['error'] = 'Authentication required.';
+
+} elseif ($action === 'autocomplete') {
     $partial = is_string($data['partial'] ?? null) ? $data['partial'] : '';
     $fullLine = is_string($data['full_line'] ?? null) ? $data['full_line'] : '';
     $commands = ['ls', 'cat', 'cd', 'run', 'unlock', 'reset', 'help', 'view', 'clear', 'logout'];
@@ -110,10 +131,13 @@ if ($action === 'login') {
         }
     }
 
-    $currentDirId = $_SESSION['current_directory_id'];
+    $terminal = new Terminal($db, $_SESSION['user_id'], $_SESSION['current_directory_id']);
+    $terminal->ensureValidCurrentDirectory();
+
+    // Escape LIKE wildcards so "%" or "_" typed by the player match literally
     $db->query("SELECT name FROM filesystem WHERE parent_id = :parent_id AND name LIKE :partial AND is_hidden = 0");
-    $db->bind(':parent_id', $currentDirId);
-    $db->bind(':partial', $partial . '%');
+    $db->bind(':parent_id', $_SESSION['current_directory_id']);
+    $db->bind(':partial', addcslashes($partial, '\\%_') . '%');
     $items = $db->resultSet();
 
     foreach ($items as $item) {
@@ -124,6 +148,9 @@ if ($action === 'login') {
 
 } elseif (isset($_SESSION['user_id'])) {
     $terminal = new Terminal($db, $_SESSION['user_id'], $_SESSION['current_directory_id']);
+    // Return to / if the current directory was deleted, moved somewhere off-limits, or re-locked
+    $terminal->ensureValidCurrentDirectory();
+
     if (trim($commandStr) === '') {
         $response['output'] = '';
     } else {

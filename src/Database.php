@@ -4,7 +4,7 @@
 class Database {
     private $host = DB_HOST;
     private $user = DB_USER;
-    private $pass = DB_PASS; // This line was incorrect in the previous response
+    private $pass = DB_PASS;
     private $dbname = DB_NAME;
 
     private $dbh; // Database handler
@@ -24,8 +24,39 @@ class Database {
             $this->dbh = new PDO($dsn, $this->user, $this->pass, $options);
         } catch (PDOException $e) {
             $this->error = $e->getMessage();
-            echo $this->error;
+            self::failConnection($this->error);
         }
+    }
+
+    /**
+     * Stop the request when the database is unreachable. The real error (which can
+     * include host and user names) goes to the server log only.
+     */
+    private static function failConnection($detail) {
+        error_log('termi-story: database connection failed: ' . $detail);
+        if (PHP_SAPI === 'cli') {
+            fwrite(STDERR, "Database connection failed: {$detail}\n");
+            exit(1);
+        }
+        if (!headers_sent()) {
+            http_response_code(503);
+        }
+        $wantsJson = false;
+        foreach (headers_list() as $header) {
+            if (stripos($header, 'Content-Type: application/json') === 0) {
+                $wantsJson = true;
+            }
+        }
+        if ($wantsJson) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Service temporarily unavailable. Please try again later.',
+                'message' => 'Database connection failed. Check the server log.',
+            ]);
+        } else {
+            echo 'Service temporarily unavailable. Please try again later.';
+        }
+        exit;
     }
 
     // Prepare statement with query

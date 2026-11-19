@@ -2,6 +2,9 @@
 // src/ScriptingEngine.php
 
 class ScriptingEngine {
+    // Longest pause a single WAIT can request, in milliseconds
+    const MAX_WAIT_MS = 30000;
+
     private $variables = [];
     private $output = '';
     private $lines = [];
@@ -35,7 +38,7 @@ class ScriptingEngine {
 
     private function processLine(&$lineNumber) {
         $line = trim($this->lines[$lineNumber]);
-        if (empty($line) || $line[0] === '#') {
+        if ($line === '' || $line[0] === '#') {
             return;
         }
 
@@ -60,7 +63,8 @@ class ScriptingEngine {
                 $this->skipToEndif($lineNumber);
                 break;
             case 'WAIT':
-                $this->output .= "%%WAIT:" . intval($args) . "%%\n";
+                $ms = max(0, min(self::MAX_WAIT_MS, intval($args)));
+                $this->output .= "%%WAIT:" . $ms . "%%\n";
                 break;
             case 'FETCH':
                 $this->handleFetch($args);
@@ -198,12 +202,16 @@ class ScriptingEngine {
         $varName = trim($parts[0]);
         $expression = trim($parts[1]);
 
-        preg_match('/(.*?)\s*([\+\-\*\/])\s*(.*)/', $expression, $matches);
-        if (count($matches) !== 4) return;
+        // operand: a number (optionally negative/decimal), a $VARIABLE, a "quoted" value or a bare word.
+        // Matching whole operands lets "-5 + 3" and "$A - -1" parse correctly.
+        $operand = '(-?\d+(?:\.\d+)?|\$[A-Za-z0-9_]+|"[^"]*"|[A-Za-z_][A-Za-z0-9_]*)';
+        if (!preg_match('/^' . $operand . '\s*([+\-*\/])\s*' . $operand . '$/', $expression, $matches)) {
+            return;
+        }
 
-        $leftVal = (float) $this->getValue(trim($matches[1]));
-        $operator = trim($matches[2]);
-        $rightVal = (float) $this->getValue(trim($matches[3]));
+        $leftVal = (float) $this->getValue($matches[1]);
+        $operator = $matches[2];
+        $rightVal = (float) $this->getValue($matches[3]);
         
         $result = 0;
         switch($operator) {
@@ -269,8 +277,7 @@ class ScriptingEngine {
         $nestingLevel = 1;
         while ($lineNumber < count($this->lines) - 1) {
             $lineNumber++;
-            $nextLine = trim($this->lines[$lineNumber]);
-            $nextCommand = strtoupper(strtok($nextLine, ' '));
+            $nextCommand = $this->commandOf($this->lines[$lineNumber]);
             if ($nextCommand === 'IF') $nestingLevel++;
             elseif ($nextCommand === 'ENDIF') {
                 $nestingLevel--;
@@ -283,14 +290,19 @@ class ScriptingEngine {
         $nestingLevel = 1;
         while ($lineNumber < count($this->lines) - 1) {
             $lineNumber++;
-            $nextLine = trim($this->lines[$lineNumber]);
-            $nextCommand = strtoupper(strtok($nextLine, ' '));
+            $nextCommand = $this->commandOf($this->lines[$lineNumber]);
             if ($nextCommand === 'IF') $nestingLevel++;
             elseif ($nextCommand === 'ENDIF') {
                 $nestingLevel--;
                 if ($nestingLevel === 0) break;
             }
         }
+    }
+
+    /** The upper-cased command word of a script line, split the same way processLine does. */
+    private function commandOf($line) {
+        $parts = preg_split('/\s+/', trim($line), 2);
+        return strtoupper($parts[0] ?? '');
     }
 
     private function getValue($token) {

@@ -26,7 +26,7 @@ class Terminal {
         $this->userId = $userId;
         $this->currentDirId = $currentDirId;
 
-        if (!isset($_SESSION['unlocked_files'])) {
+        if (!isset($_SESSION['unlocked_files']) || !is_array($_SESSION['unlocked_files'])) {
             $_SESSION['unlocked_files'] = [];
         }
     }
@@ -54,7 +54,57 @@ class Terminal {
 
     private function lockedMessage($file, $filename) {
         $hint = (string)($file['password_hint'] ?? '');
-        return $this->text("Access Denied. File is locked.\nHint: {$hint}\nUse: unlock {$filename} [password]");
+        $what = ($file['type'] ?? '') === 'dir' ? 'Directory' : 'File';
+        return $this->text("Access Denied. {$what} is locked.\nHint: {$hint}\nUse: unlock {$filename} [password]");
+    }
+
+    // --- Locks ---
+    // An unlock is remembered together with a fingerprint of the password hash it was
+    // opened with, so changing an item's password in the admin panel locks it again.
+
+    private static function lockFingerprint($passwordHash) {
+        return hash('sha256', (string)$passwordHash);
+    }
+
+    private function isLocked($item) {
+        if (empty($item['password'])) {
+            return false;
+        }
+        $unlocked = $_SESSION['unlocked_files'][$item['id']] ?? null;
+        return !(is_string($unlocked) && hash_equals($unlocked, self::lockFingerprint($item['password'])));
+    }
+
+    private function markUnlocked($item) {
+        $_SESSION['unlocked_files'][$item['id']] = self::lockFingerprint($item['password']);
+    }
+
+    /**
+     * Make sure the session's current directory still exists, is reachable by this
+     * player and isn't (re)locked; otherwise return to /. Covers directories that were
+     * deleted, moved under a restricted parent, reassigned, or given a new password.
+     */
+    public function ensureValidCurrentDirectory() {
+        $dirId = (int)$this->currentDirId;
+        $seen = [];
+        while ($dirId !== 1) {
+            $this->db->query("SELECT id, type, parent_id, owner_id, password FROM filesystem WHERE id = :id");
+            $this->db->bind(':id', $dirId);
+            $dir = $this->db->single();
+            $valid = $dir
+                && !isset($seen[$dirId])
+                && $dir['type'] === 'dir'
+                && $dir['parent_id'] !== null
+                && $this->_checkPermission($dir['owner_id'])
+                && !$this->isLocked($dir);
+            if (!$valid) {
+                $this->currentDirId = 1;
+                $_SESSION['current_directory_id'] = 1;
+                return false;
+            }
+            $seen[$dirId] = true;
+            $dirId = (int)$dir['parent_id'];
+        }
+        return true;
     }
 
     public function executeCommand($commandStr) {
@@ -143,7 +193,7 @@ class Terminal {
             return $this->text("Cannot display content of an executable file. Use 'run {$filename}' instead.", 'typewriterChunk');
         }
 
-        if (!empty($file['password']) && !in_array($file['id'], $_SESSION['unlocked_files'])) {
+        if ($this->isLocked($file)) {
             $locked = $this->lockedMessage($file, $filename);
             $locked['animation'] = 'typewriterChunk';
             return $locked;
@@ -180,7 +230,7 @@ class Terminal {
                 $_SESSION['current_directory_id'] = $current['parent_id'];
             }
         } else {
-            $this->db->query("SELECT id, owner_id FROM filesystem WHERE parent_id = :currentDirId AND name = :name AND type = 'dir'");
+            $this->db->query("SELECT id, type, owner_id, password, password_hint FROM filesystem WHERE parent_id = :currentDirId AND name = :name AND type = 'dir'");
             $this->db->bind(':currentDirId', $this->currentDirId);
             $this->db->bind(':name', $targetDirName);
             $target = $this->db->single();
@@ -188,6 +238,9 @@ class Terminal {
             if ($target) {
                 if (!$this->_checkPermission($target['owner_id'])) {
                     return $this->text("cd: {$targetDirName}: Access Denied. No user permission.");
+                }
+                if ($this->isLocked($target)) {
+                    return $this->lockedMessage($target, $targetDirName);
                 }
                 $_SESSION['current_directory_id'] = $target['id'];
             } else {
@@ -203,7 +256,7 @@ class Terminal {
         }
         $filename = $args[0];
 
-        $this->db->query("SELECT id, password, owner_id FROM filesystem WHERE parent_id = :currentDirId AND name = :name");
+        $this->db->query("SELECT id, type, password, owner_id FROM filesystem WHERE parent_id = :currentDirId AND name = :name");
         $this->db->bind(':currentDirId', $this->currentDirId);
         $this->db->bind(':name', $filename);
         $file = $this->db->single();
@@ -220,7 +273,7 @@ class Terminal {
             return $this->text("File is not password protected.", 'typewriter');
         }
 
-        if (in_array($file['id'], $_SESSION['unlocked_files'])) {
+        if (!$this->isLocked($file)) {
             return $this->text("File is already unlocked.", 'typewriter');
         }
 
@@ -236,8 +289,13 @@ class Terminal {
 
         $passwordAttempt = $args[1];
         if (password_verify($passwordAttempt, $file['password'])) {
-            $_SESSION['unlocked_files'][] = $file['id'];
-            return $this->text("Access Granted. You can now 'cat' the file.", 'typewriter');
+            $this->markUnlocked($file);
+            $next = [
+                'dir' => "You can now 'cd' into it.",
+                'app' => "You can now 'run' it.",
+                'img' => "You can now 'view' the file.",
+            ][$file['type']] ?? "You can now 'cat' the file.";
+            return $this->text("Access Granted. {$next}", 'typewriter');
         } else {
             RateLimiter::hit($limiterKey, self::UNLOCK_WINDOW_SECONDS);
             return $this->text("Access Denied. Incorrect password.");
@@ -257,7 +315,7 @@ class Terminal {
             $_SESSION['run_input'] = null;
         }
 
-        $this->db->query("SELECT content, owner_id FROM filesystem WHERE parent_id = :currentDirId AND name = :name AND type = 'app'");
+        $this->db->query("SELECT id, type, content, owner_id, password, password_hint FROM filesystem WHERE parent_id = :currentDirId AND name = :name AND type = 'app'");
         $this->db->bind(':currentDirId', $this->currentDirId);
         $this->db->bind(':name', $filename);
         $file = $this->db->single();
@@ -268,6 +326,10 @@ class Terminal {
 
         if (!$this->_checkPermission($file['owner_id'])) {
             return $this->text("Access Denied. No user permission.");
+        }
+
+        if ($this->isLocked($file)) {
+            return $this->lockedMessage($file, $filename);
         }
 
         // Run the script as the author wrote it (quotes, <, > etc.), not its stored encoding.
@@ -301,7 +363,7 @@ class Terminal {
             return $this->text("Image file render error. Likely invalid image file.");
         }
 
-        if (!empty($file['password']) && !in_array($file['id'], $_SESSION['unlocked_files'])) {
+        if ($this->isLocked($file)) {
             return $this->lockedMessage($file, $filename);
         }
 

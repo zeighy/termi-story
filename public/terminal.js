@@ -290,13 +290,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (autocompleteMatches.length === 0 || partial !== lastPartial) {
             lastPartial = partial;
-            const response = await fetch('api.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'autocomplete', partial: partial, full_line: fullLine })
-            });
-            const data = await response.json();
-            autocompleteMatches = data.matches || [];
+            const data = await postJson({ action: 'autocomplete', partial: partial, full_line: fullLine });
+            autocompleteMatches = (data && Array.isArray(data.matches)) ? data.matches : [];
             autocompleteIndex = 0;
         }
 
@@ -311,14 +306,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // POST to the API and return the parsed JSON, or null if the server or network failed
+    async function postJson(body) {
+        try {
+            const response = await fetch('api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            return await response.json();
+        } catch (err) {
+            console.error('API request failed:', err);
+            return null;
+        }
+    }
+
     async function handleLogin(username, password) {
-        const response = await fetch('api.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'login', username, password })
-        });
-        const data = await response.json();
-        
+        const data = await postJson({ action: 'login', username, password });
+        if (!data) {
+            displayText('Connection error. Please try again.');
+            promptLabel.textContent = 'Username:';
+            terminalState = 'login-username';
+            return;
+        }
+
         if (data.success) {
             displayText(data.output + "\n\n" + motd);
             terminalState = 'active';
@@ -374,13 +385,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function processCommand(command) {
-        const response = await fetch('api.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: command })
-        });
-        const data = await response.json();
-        
+        const data = await postJson({ command: command });
+        if (!data) {
+            displayHtml('<span style="color: red;">Connection error. Please try again.</span>');
+            return;
+        }
+
         if (data.output) {
             if (data.animation === 'typewriter') {
                 await typewriterEffect(data.output);

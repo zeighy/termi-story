@@ -34,6 +34,8 @@ It's built with PHP and a MySQL database on the back-end, with a dynamic, vanill
 - **Secure Logins:** Separate, secure logins for the administrator and players.
 - **Full Filesystem Manager:** A web UI to create, edit, and delete all files and directories.
 - **User Permissions:** Set access restrictions on files and directories. Assign ownership to a specific player or make it available to "All Users". Files restricted to other users will return "Access Denied" if an unauthorized user attempts to access them.
+- **Locks:** Give any file, directory or app a lock password (with an optional hint). Players must `unlock` it before they can read a file, `cd` into a directory, or `run` an app. Changing the password locks it again for players who had already unlocked it.
+- **Naming:** Players type names as single words, so item names can't contain spaces or slashes.
 - **Full User Manager:** An interface to add, edit, and delete player accounts.
 - **Branding & Theming:** A theme manager to customize the terminal's title, greetings, MOTD, and color scheme.
 
@@ -70,7 +72,7 @@ This section covers the requirements for hosting your Termi-Story application an
 To run this application, your web server must have the following:
 
 - **Web Server:** Apache or Nginx is recommended.
-- **PHP:** Version 7.4 or higher.
+- **PHP:** Version 8.0 or higher, with Argon2 password hashing available (`PASSWORD_ARGON2ID`, included in standard builds).
 - **MySQL Database:** A database to store the filesystem, users, and theme settings.
 - **PHP Extension:** The pdo_mysql extension must be enabled in your php.ini file.
 
@@ -135,7 +137,7 @@ The heart of your interactive story is the scripting engine. This guide explains
 - **ECHO \[text to display\]**: Displays text to the player.
 - **SET \[variable_name\] = \[value\]**: Creates or modifies a player variable.
 - **CALC \[variable_name\] = \[value1\] \[operator\] \[value2\]**: Performs a math operation (+, -, \*, /).
-- **WAIT \[milliseconds\]**: Pauses the script.
+- **WAIT \[milliseconds\]**: Pauses the script (up to 30000 ms per WAIT).
 - **IF \[condition\] / ELSE / ENDIF**: Controls the flow of your script.
 - **FETCH \[variable_name\] = \[URL\]**: Fetches data from a fixed URL endpoint. The endpoint must return JSON containing a "value" field. The value is sanitized to only allow alphanumeric characters and then stored in the specified variable. On error (connection issue, missing "value" field, etc.), the variable is set to an empty string ("").
 
@@ -187,7 +189,7 @@ As a player, your goal is to explore the pseudo-filesystem and uncover secrets.
 - **cd \[directory\]**: Changes your directory.
 - **cat \[filename\]**: Displays a text file's contents.
 - **run \[appname.app\]**: Executes a script aka ‘program’.
-- **unlock \[filename\] \[password\]**: Unlocks a protected file.
+- **unlock \[name\] \[password\]**: Unlocks a protected file, directory or app.
 - **view \[filename\]**: Views an image file.
 - **reset**: Resets all your progress.
 - **help**: Displays available commands.

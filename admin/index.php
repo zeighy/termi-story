@@ -30,10 +30,10 @@ foreach ($themeResults as $row) {
     <link rel="stylesheet" href="assets/admin.css">
     <style>
         :root {
-            --theme-bg-color: <?php echo htmlspecialchars($theme['background_color'] ?? '#1a1a1a'); ?>;
-            --theme-text-color: <?php echo htmlspecialchars($theme['text_color'] ?? '#00ff00'); ?>;
-            --theme-prompt-user-color: <?php echo htmlspecialchars($theme['prompt_color_user'] ?? '#50fa7b'); ?>;
-            --theme-prompt-path-color: <?php echo htmlspecialchars($theme['prompt_color_path'] ?? '#bd93f9'); ?>;
+            --theme-bg-color: <?php echo Security::safeColor($theme['background_color'] ?? null, '#1a1a1a'); ?>;
+            --theme-text-color: <?php echo Security::safeColor($theme['text_color'] ?? null, '#00ff00'); ?>;
+            --theme-prompt-user-color: <?php echo Security::safeColor($theme['prompt_color_user'] ?? null, '#50fa7b'); ?>;
+            --theme-prompt-path-color: <?php echo Security::safeColor($theme['prompt_color_path'] ?? null, '#bd93f9'); ?>;
         }
     </style>
 </head>
@@ -61,6 +61,8 @@ foreach ($themeResults as $row) {
                     <li><b>File Tree:</b> The tree on the left displays the current file and folder structure.</li>
                     <li><b>Actions:</b> To <strong>Edit</strong> or <strong>Delete</strong> an item, right-click on it in the tree to open the context menu.</li>
                     <li><b>Adding Items:</b> To add a new file or directory, first click on the parent directory in the tree where you want to add it. Then, fill out the "Add New Item" form on the right.</li>
+                    <li><b>Names:</b> Players type names as single words, so names can't contain spaces or slashes (use <code>_</code> or <code>-</code> instead).</li>
+                    <li><b>Locks:</b> Any item can have a lock password. Players must <code>unlock</code> it before reading a file, entering a directory, or running an app. Changing the password locks it again for players who had unlocked it.</li>
                 </ul>
             </div>
             <div class="help-tab" data-tab="users" style="display: none;">
@@ -145,9 +147,10 @@ foreach ($themeResults as $row) {
                         <textarea id="item-content" name="content" rows="8"></textarea>
                     </div>
 
-                    <div id="password-wrapper" style="display: none;">
-                         <label for="item-password">Password (optional):</label>
+                    <div id="password-wrapper">
+                         <label for="item-password">Lock password (optional):</label>
                          <input type="text" id="item-password" name="password">
+                         <small>Players must <code>unlock</code> it first: to read a file, <code>cd</code> into a directory, or <code>run</code> an app.</small>
                          <label for="item-hint">Hint (optional):</label>
                          <input type="text" id="item-hint" name="password_hint">
                     </div>
@@ -317,10 +320,14 @@ foreach ($themeResults as $row) {
                 </div>
                 
                 <div id="edit-password-wrapper">
-                     <label for="edit-item-password">Password (optional):</label>
+                     <p id="edit-lock-status" style="display: none; margin: 10px 0 0;"><strong>Locked.</strong> Leave the password blank to keep the current one.</p>
+                     <label for="edit-item-password">Lock password (optional):</label>
                      <input type="text" id="edit-item-password" name="password">
                      <label for="edit-item-hint">Hint (optional):</label>
                      <input type="text" id="edit-item-hint" name="password_hint">
+                     <label class="checkbox-label" id="edit-remove-lock-label" style="display: none;">
+                         <input type="checkbox" id="edit-remove-password" name="remove_password" value="1"> Remove lock
+                     </label>
                 </div>
 
                 <label class="checkbox-label">

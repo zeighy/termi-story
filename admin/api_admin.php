@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/Security.php';
 Security::startSession(Security::ADMIN_SESSION_NAME);
+Security::handleUncaughtAsJson();
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../config/database.php';
