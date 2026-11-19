@@ -95,7 +95,7 @@ class ScriptingEngine {
     // (including ones arriving via story import) from reading local files through PHP
     // stream wrappers (file://, php://, phar://) or probing internal services and
     // cloud metadata endpoints. To allow LAN/localhost endpoints, define
-    // FETCH_ALLOW_PRIVATE_HOSTS as true in config/database.php.
+    // FETCH_ALLOW_PRIVATE_HOSTS as true in config/config.local.php.
 
     const FETCH_TIMEOUT_SECONDS = 10;
     const FETCH_MAX_BYTES = 65536;

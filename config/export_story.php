@@ -7,8 +7,9 @@
 
 // --- Environment Setup ---
 // Ensure this script is run from the command line, not a web browser.
-if (php_sapi_name() !== 'cli') {
-    die("This script can only be run from the command line.");
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit("This script can only be run from the command line.\n");
 }
 
 // Include necessary files

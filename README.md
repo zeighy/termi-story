@@ -51,12 +51,12 @@ The project is organized into four main directories to separate concerns.
 /termi-story/  
 |  
 ├── admin/ # Admin panel UI and logic.  
-├── config/ # Database connection details.  
+├── config/ # Settings loader, local credentials and CLI maintenance scripts.  
 ├── public/ # All publicly accessible files (the user terminal).  
 └── src/ # Core back-end PHP classes (the engine).
 
 - **/admin/**: Contains all files for the web-based administrator panel, including the UI for managing the filesystem, users, and themes.
-- **/config/**: Holds the database.php file for your database credentials.
+- **/config/**: `database.php` loads your settings from `config.local.php` (your credentials; not tracked in git) or from environment variables. It also holds the command-line maintenance scripts.
 - **/public/**: This is the only directory that should be accessible to the public. It contains the player-facing terminal (index.php), its assets (.js, .css), and the API files it communicates with.
 - **/src/**: Contains all the core PHP classes that power the application, including the terminal command engine, the scripting engine, and the admin logic.
 
@@ -73,6 +73,18 @@ To run this application, your web server must have the following:
 - **MySQL Database:** A database to store the filesystem, users, and theme settings.
 - **PHP Extension:** The pdo_mysql extension must be enabled in your php.ini file.
 
+**Configuration**
+
+Credentials are never stored in tracked files. Set them up like this:
+
+1. Copy `config/config.local.example.php` to `config/config.local.php`. This file is gitignored.
+2. Fill in your database settings (`DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`).
+3. Generate an admin password hash with `php config/hash_password.php 'your-long-unique-password'` and paste it into `ADMIN_PASSWORD_HASH`. Keep the single quotes, because the hash contains `$` characters. **Admin login stays disabled until a hash is set.**
+
+Alternatively, set the environment variables `TERMI_DB_HOST`, `TERMI_DB_USER`, `TERMI_DB_PASS`, `TERMI_DB_NAME`, `TERMI_ADMIN_USERNAME` and `TERMI_ADMIN_PASSWORD_HASH`. Values in `config.local.php` take precedence over environment variables.
+
+> **Upgrading from an older version:** earlier versions kept credentials in `config/database.php` and the admin hash in `admin/auth.php`. Move those values into `config/config.local.php`, then discard your local edits to those two files before pulling.
+
 **Securing the Document Root**
 
 The most effective security measure is to set your web server's **document root** (or "webroot") to the /public directory inside your project folder.
@@ -82,9 +94,21 @@ The most effective security measure is to set your web server's **document root*
 
 By doing this, the public can **only** access files inside /public. All of your sensitive core logic (/src), configuration files (/config), and the entire admin panel (/admin) will be located outside the webroot, making them completely inaccessible from a web browser.
 
+There are also fallbacks in case the document root is set up incorrectly:
+
+- The maintenance scripts in `/config` (`update_*.php`, `hash_password.php`, `export_story.php`) refuse to run outside the command line.
+- **Apache:** `.htaccess` files deny web access to `/config` and `/src`. The project-root `.htaccess` also hides `.git` and other dotfiles, `/verification`, `dbsetup.txt`, `README.md` and `LICENSE`.
+- **Nginx** ignores `.htaccess`. If you can't point the root at `/public`, add an equivalent rule:
+
+  ```nginx
+  location ~ (^|/)\.(?!well-known/) { return 404; }
+  location ~ ^/(config|src|verification)(/|$) { return 404; }
+  location ~ ^/(dbsetup\.txt|README\.md|LICENSE)$ { return 404; }
+  ```
+
 **Securing the Admin Panel**
 
-1. **Use a Strong Admin Password:** The admin password in admin/auth.php should be long, complex, and unique.
+1. **Use a Strong Admin Password:** The admin password (whose hash goes in `config/config.local.php`) should be long, complex, and unique.
 2. **Rename the Admin Directory (Recommended):** After you have finished creating your story's content, consider renaming the /admin directory to something random and hard to guess (e.g., /adm_panel_a7b3c9). Or, you can also just delete it entirely as the public and backend has no dependencies from the admin panel.
 3. **Server-Level Protection (Advanced):** Use an .htaccess file (on Apache) or similar configurations on Nginx to password-protect the admin directory at the server level.
 
@@ -97,7 +121,7 @@ By doing this, the public can **only** access files inside /public. All of your 
   - Admin login: 5 failures per IP address in 15 minutes.
   - `unlock`: 20 wrong passwords per player in 5 minutes.
 
-  Attempt counts are kept as small files in the system temp directory, so no database changes are needed. To store them elsewhere, add `define('RATE_LIMIT_DIR', '/path/to/dir');` to `config/database.php`. Limits are keyed on `REMOTE_ADDR`, so if you run behind a reverse proxy, configure it to pass the real client address to PHP (for example, `mod_remoteip` or the nginx `real_ip` module). Otherwise, all players share one IP-based limit.
+  Attempt counts are kept as small files in the system temp directory, so no database changes are needed. To store them elsewhere, add `define('RATE_LIMIT_DIR', '/path/to/dir');` to `config/config.local.php`. Limits are keyed on `REMOTE_ADDR`, so if you run behind a reverse proxy, configure it to pass the real client address to PHP (for example, `mod_remoteip` or the nginx `real_ip` module). Otherwise, all players share one IP-based limit.
 
 # Creator's Guide: The Scripting Engine
 
@@ -114,7 +138,7 @@ The heart of your interactive story is the scripting engine. This guide explains
 
 > **Note on FETCH:** You can also use `FETCH` to ping a URL (e.g., to count how many times a script has run). The server should still return JSON with a `value` field (like `{"value": "OK"}`) for the script to successfully proceed. You can then optionally reset the variable on the next line using `SET [variable_name] = ""`.
 
-> **FETCH restrictions:** For safety, `FETCH` only supports `http://` and `https://` URLs, does not follow redirects (use the final URL), reads at most 64 KB, and times out after 10 seconds. URLs whose host resolves to a private, loopback, link-local or otherwise non-public address (e.g. `localhost`, `192.168.x.x`, `169.254.169.254`) are refused. If your endpoint runs on the same machine or your LAN, add `define('FETCH_ALLOW_PRIVATE_HOSTS', true);` to `config/database.php`. Only do this if you trust every script on the server, including any you import.
+> **FETCH restrictions:** For safety, `FETCH` only supports `http://` and `https://` URLs, does not follow redirects (use the final URL), reads at most 64 KB, and times out after 10 seconds. URLs whose host resolves to a private, loopback, link-local or otherwise non-public address (e.g. `localhost`, `192.168.x.x`, `169.254.169.254`) are refused. If your endpoint runs on the same machine or your LAN, add `define('FETCH_ALLOW_PRIVATE_HOSTS', true);` to `config/config.local.php`. Only do this if you trust every script on the server, including any you import.
 
 **Variables Explained**
 
