@@ -13,13 +13,36 @@ $theme = [];
 foreach ($themeResults as $row) {
     $theme[$row['name']] = $row['value'];
 }
+
+// Screen effects and sound levels chosen by the author (Admin > Theme). Players can
+// override both from the settings menu; their choice is kept in their browser, not the
+// database. Must match Admin::CRT_LEVELS / SOUND_LEVELS and terminal.js.
+$crtLevels = ['off', 'subtle', 'full'];
+$crtLevel = in_array($theme['crt_level'] ?? '', $crtLevels, true) ? $theme['crt_level'] : 'full';
+$soundLevels = ['off', 'low', 'high'];
+$soundLevel = in_array($theme['sound_level'] ?? '', $soundLevels, true) ? $theme['sound_level'] : 'off';
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-fx="<?php echo $crtLevel; ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($theme['terminal_title'] ?? 'PseudoTerm'); ?></title>
+    <script>
+        // Settings saved by terminal.js. Apply the player's effects level before the
+        // first paint so a player who turned effects off never sees them flash on.
+        const SETTINGS_STORAGE_KEY = 'termistory.settings';
+        const authorFxLevel = <?php echo json_encode($crtLevel); ?>;
+        const authorSoundLevel = <?php echo json_encode($soundLevel); ?>;
+        try {
+            const saved = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
+            if (saved && <?php echo json_encode($crtLevels); ?>.includes(saved.fx)) {
+                document.documentElement.dataset.fx = saved.fx;
+            }
+        } catch (err) {
+            // No storage available: keep the author's level
+        }
+    </script>
     <link rel="stylesheet" href="terminal.css">
     <style>
         :root {
@@ -31,6 +54,34 @@ foreach ($themeResults as $row) {
     </style>
 </head>
 <body>
+    <div id="settings" class="settings">
+        <button type="button" id="settings-toggle" class="settings-toggle" aria-expanded="false" aria-controls="settings-panel" title="Settings">
+            <span aria-hidden="true">&#8801;</span><span class="visually-hidden">Settings</span>
+        </button>
+        <div id="settings-panel" class="settings-panel" hidden>
+            <fieldset>
+                <legend>Text speed</legend>
+                <label><input type="radio" name="speed" value="slow"> Slow</label>
+                <label><input type="radio" name="speed" value="normal"> Normal</label>
+                <label><input type="radio" name="speed" value="fast"> Fast</label>
+                <label><input type="radio" name="speed" value="instant"> Instant</label>
+            </fieldset>
+            <fieldset>
+                <legend>Screen effects</legend>
+                <label><input type="radio" name="fx" value="off"> Off</label>
+                <label><input type="radio" name="fx" value="subtle"> Subtle</label>
+                <label><input type="radio" name="fx" value="full"> Full</label>
+            </fieldset>
+            <fieldset>
+                <legend>Sound</legend>
+                <label><input type="radio" name="sound" value="off"> Off</label>
+                <label><input type="radio" name="sound" value="low"> Low</label>
+                <label><input type="radio" name="sound" value="high"> High</label>
+            </fieldset>
+            <p class="settings-hint">While text is printing, press any key or tap the screen to skip ahead.</p>
+        </div>
+    </div>
+    <div id="crt-overlay" aria-hidden="true"></div>
     <div id="terminal-container">
         <div id="terminal-output">
         </div>
@@ -49,6 +100,7 @@ foreach ($themeResults as $row) {
         const motd = <?php echo json_encode((string)($theme['motd'] ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         const loginGreeting = <?php echo json_encode((string)($theme['login_greeting'] ?? 'Welcome.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     </script>
+    <script src="sound.js"></script>
     <script src="terminal.js"></script>
 </body>
 </html>

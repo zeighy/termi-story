@@ -4,7 +4,8 @@
 // Output contract: every response's 'output' is PLAIN TEXT, and the browser escapes it
 // before display. The only exception is a response with 'format' => 'html' (used by ls
 // for coloured names), whose HTML is built here from escaped parts. Each command
-// also chooses its own 'animation', so the client never infers anything from the wording.
+// also chooses its own 'animation' and, optionally, a 'sound' (a name from public/sound.js),
+// so the client never infers anything from the wording.
 //
 // Storage contract: txt/app content is stored HTML-encoded exactly once (see Admin::encodeContent).
 // It is decoded here before being shown or executed.
@@ -40,6 +41,13 @@ class Terminal {
         return $response;
     }
 
+    /** A refusal: plain text, with the error sound (the browser plays it if sound is on). */
+    private function denied($output, $animation = null) {
+        $response = $this->text($output, $animation);
+        $response['sound'] = 'error';
+        return $response;
+    }
+
     /** Decode stored (HTML-encoded) txt/app content back to the text the author wrote. */
     private function decodeContent($content) {
         return htmlspecialchars_decode((string)$content, ENT_QUOTES);
@@ -55,7 +63,7 @@ class Terminal {
     private function lockedMessage($file, $filename) {
         $hint = (string)($file['password_hint'] ?? '');
         $what = ($file['type'] ?? '') === 'dir' ? 'Directory' : 'File';
-        return $this->text("Access Denied. {$what} is locked.\nHint: {$hint}\nUse: unlock {$filename} [password]");
+        return $this->denied("Access Denied. {$what} is locked.\nHint: {$hint}\nUse: unlock {$filename} [password]");
     }
 
     // --- Locks ---
@@ -188,7 +196,7 @@ class Terminal {
         }
 
         if (!$this->_checkPermission($file['owner_id'])) {
-            return $this->text("Access Denied. No user permission.", 'typewriterChunk');
+            return $this->denied("Access Denied. No user permission.", 'typewriterChunk');
         }
 
         if ($file['type'] === 'dir') {
@@ -243,7 +251,7 @@ class Terminal {
 
             if ($target) {
                 if (!$this->_checkPermission($target['owner_id'])) {
-                    return $this->text("cd: {$targetDirName}: Access Denied. No user permission.");
+                    return $this->denied("cd: {$targetDirName}: Access Denied. No user permission.");
                 }
                 if ($this->isLocked($target)) {
                     return $this->lockedMessage($target, $targetDirName);
@@ -272,7 +280,7 @@ class Terminal {
         }
 
         if (!$this->_checkPermission($file['owner_id'])) {
-            return $this->text("Access Denied. No user permission.");
+            return $this->denied("Access Denied. No user permission.");
         }
 
         if (empty($file['password'])) {
@@ -290,7 +298,7 @@ class Terminal {
         $limiterKey = 'unlock-user:' . $this->userId;
         $retryAfter = RateLimiter::retryAfter($limiterKey, self::UNLOCK_MAX_FAILURES, self::UNLOCK_WINDOW_SECONDS);
         if ($retryAfter > 0) {
-            return $this->text("Access Denied. Too many failed attempts. Try again in {$retryAfter} seconds.");
+            return $this->denied("Access Denied. Too many failed attempts. Try again in {$retryAfter} seconds.");
         }
 
         $passwordAttempt = $args[1];
@@ -301,10 +309,12 @@ class Terminal {
                 'app' => "You can now 'run' it.",
                 'img' => "You can now 'view' the file.",
             ][$file['type']] ?? "You can now 'cat' the file.";
-            return $this->text("Access Granted. {$next}", 'typewriter');
+            $response = $this->text("Access Granted. {$next}", 'typewriter');
+            $response['sound'] = 'success';
+            return $response;
         } else {
             RateLimiter::hit($limiterKey, self::UNLOCK_WINDOW_SECONDS);
-            return $this->text("Access Denied. Incorrect password.");
+            return $this->denied("Access Denied. Incorrect password.");
         }
     }
 
@@ -331,7 +341,7 @@ class Terminal {
         }
 
         if (!$this->_checkPermission($file['owner_id'])) {
-            return $this->text("Access Denied. No user permission.");
+            return $this->denied("Access Denied. No user permission.");
         }
 
         if ($this->isLocked($file)) {
@@ -362,7 +372,7 @@ class Terminal {
         }
 
         if (!$this->_checkPermission($file['owner_id'])) {
-            return $this->text("Access Denied. No user permission.");
+            return $this->denied("Access Denied. No user permission.");
         }
 
         if ($file['type'] !== 'img') {

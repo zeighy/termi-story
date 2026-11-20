@@ -70,9 +70,14 @@ class Admin {
     const ITEM_TYPES = ['dir', 'txt', 'app', 'img'];
     const THEME_KEYS = [
         'background_color', 'text_color', 'prompt_color_user', 'prompt_color_path',
-        'terminal_title', 'login_greeting', 'motd',
+        'terminal_title', 'login_greeting', 'motd', 'crt_level', 'sound_level',
     ];
     const THEME_COLOR_KEYS = ['background_color', 'text_color', 'prompt_color_user', 'prompt_color_path'];
+    // Screen effects levels for the player terminal (the author's default; players can
+    // override it in their browser). Must match public/index.php and public/terminal.js.
+    const CRT_LEVELS = ['off', 'subtle', 'full'];
+    // Sound levels, likewise the author's default for players
+    const SOUND_LEVELS = ['off', 'low', 'high'];
 
     private static function fail($message) {
         return ['success' => false, 'message' => $message];
@@ -578,6 +583,12 @@ class Admin {
             if (in_array($key, self::THEME_COLOR_KEYS, true) && !Security::isHexColor($value)) {
                 return [null, "Theme setting '{$key}' must be a hex colour such as #1a1a1a."];
             }
+            if ($key === 'crt_level' && !in_array($value, self::CRT_LEVELS, true)) {
+                return [null, "Theme setting 'crt_level' must be one of: " . implode(', ', self::CRT_LEVELS) . '.'];
+            }
+            if ($key === 'sound_level' && !in_array($value, self::SOUND_LEVELS, true)) {
+                return [null, "Theme setting 'sound_level' must be one of: " . implode(', ', self::SOUND_LEVELS) . '.'];
+            }
             $clean[$key] = $value;
         }
         return [$clean, null];
@@ -588,10 +599,14 @@ class Admin {
         if ($error !== null) {
             return self::fail($error);
         }
-        $this->db->query("UPDATE themes SET value = :value WHERE name = :name");
+        // Insert settings that don't have a row yet (e.g. crt_level on installs created
+        // before it existed), so new theme settings need no database migration.
+        $this->db->query("INSERT INTO themes (name, value) VALUES (:name, :value)
+                          ON DUPLICATE KEY UPDATE value = :new_value");
         foreach ($clean as $name => $value) {
             $this->db->bind(':name', $name);
             $this->db->bind(':value', $value);
+            $this->db->bind(':new_value', $value);
             $this->db->execute();
         }
         return ['success' => true, 'message' => 'Theme updated successfully!'];

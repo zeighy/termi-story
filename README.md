@@ -27,7 +27,10 @@ It's built with PHP and a MySQL database on the back-end, with a dynamic, vanill
 - **Full Command Set:** ls, cat, cd, run, unlock, reset, help, and more.
 - **Advanced Scripting Engine:** Run .app files with variables, conditional logic (IF/ELSE, AND/OR), math (CALC), and atmospheric delays (WAIT).
 - **Quality of Life:** Command history (arrow keys) and tab autocompletion.
-- **Animations:** Typewriter and "buffering" effects for an authentic feel.
+- **Animations:** Typewriter and "buffering" effects for an authentic feel. Players can skip ahead by pressing any key or tapping the screen.
+- **Settings Menu:** A menu button in the top-right corner lets players pick a text speed (Slow, Normal, Fast or Instant), a screen effects level (Off, Subtle or Full) and a sound level (Off, Low or High). Choices are saved in the player's browser.
+- **Sound:** Key clicks, printing ticks, a monitor power-on at login, and sounds for Access Denied / Access Granted. Every sound is synthesized in the browser (no audio files). Browsers only allow sound after the player's first key press or tap.
+- **Reduced Motion:** Flicker, the rolling scan band, the boot blur and the blinking cursor are switched off for players whose system asks for reduced motion.
 
 **Admin Panel**
 
@@ -38,7 +41,7 @@ It's built with PHP and a MySQL database on the back-end, with a dynamic, vanill
 - **Naming:** Players type names as single words, so item names can't contain spaces or slashes.
 - **Full User Manager:** An interface to add, edit, and delete player accounts.
 - **Deleting users safely:** When you delete a user who owns files or directories, the admin panel lists what they own and asks you to either transfer it all to another user or make it available to all users. The user can't be deleted until you choose.
-- **Branding & Theming:** A theme manager to customize the terminal's title, greetings, MOTD, and color scheme.
+- **Branding & Theming:** A theme manager to customize the terminal's title, greetings, MOTD, color scheme, the default screen effects level (Full, Subtle or Off) and the default sound level (Off, Low or High; Off unless you change it). Players can override both for themselves. Installs created before these settings existed need no database update: they are added the first time you save the theme.
 
 
 **Story Backup (Admin)**
@@ -146,6 +149,34 @@ The heart of your interactive story is the scripting engine. This guide explains
 
 > **FETCH restrictions:** For safety, `FETCH` only supports `http://` and `https://` URLs, does not follow redirects (use the final URL), reads at most 64 KB, and times out after 10 seconds. URLs whose host resolves to a private, loopback, link-local or otherwise non-public address (e.g. `localhost`, `192.168.x.x`, `169.254.169.254`) are refused. If your endpoint runs on the same machine or your LAN, add `define('FETCH_ALLOW_PRIVATE_HOSTS', true);` to `config/config.local.php`. Only do this if you trust every script on the server, including any you import.
 
+**Presentation Commands**
+
+These change how the script's output is shown or heard. They don't affect variables.
+
+- **CLEAR**: Clears the player's screen.
+- **GLITCH \[milliseconds\]**: A burst of signal interference with static (default 400, from 100 to 3000). At the Full effects level the picture jumps and tears; at Subtle the text only fringes with colour.
+- **SHAKE \[milliseconds\]**: A heavy impact: a thud, and at Full the screen shakes (default 500, from 100 to 2000).
+- **BEEP \[tone\]**: Plays a sound: `beep` (default), `high`, `low`, `alert`, `error`, `success`, `static`, `power` or `thud`.
+- **TYPE \[slow|normal|fast\]**: Changes the typing pace for the following ECHO lines, relative to the speed the player chose (a player on Instant still sees text instantly).
+- **STYLE \[normal|dim|bright|warn|alert\]**: Styles the following ECHO lines: faded, bold and glowing, amber, or red.
+
+TYPE and STYLE last until changed or until the script ends. Durations and words can come from variables (e.g. `GLITCH $LEN`); an unknown tone or style falls back to the default. Effects only move at the Full level, never for players whose system asks for reduced motion, and players who skip ahead skip one-off effects (GLITCH, SHAKE, BEEP) but still get CLEAR, TYPE and STYLE.
+
+**Example:**
+
+```
+STYLE warn
+ECHO WARNING: hull pressure dropping
+STYLE normal
+WAIT 500
+SHAKE 800
+BEEP alert
+GLITCH 600
+CLEAR
+TYPE slow
+ECHO ...is anyone there?
+```
+
 **Variables Explained**
 
 - **Player Variables:** Created with SET or CALC. They are unique to each player and are saved automatically.
@@ -201,6 +232,11 @@ As a player, your goal is to explore the pseudo-filesystem and uncover secrets.
 
 - **Command History**: Use the **Up** and **Down** arrow keys.
 - **Tab Autocomplete**: Press the **Tab** key to complete commands and filenames. A triple comma (,,,) can also be used for auto complete on devices with no tab key.
+
+**Settings Menu**
+
+- Use the **menu button** in the top-right corner to change the **text speed**, the **screen effects** and the **sound**. Your choices are remembered in this browser.
+- While text is printing, **press any key or tap the screen** to skip ahead. Each press finishes the text up to the next pause; pressing during a pause ends it early.
 
 **Important Note on Progress**
 
