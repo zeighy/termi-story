@@ -78,6 +78,7 @@ foreach ($themeResults as $row) {
                 <p>Customize the appearance of the public-facing terminal.</p>
                 <ul>
                     <li><b>Colors & Text:</b> Adjust colors and text instantly.</li>
+                    <li><b>Screen Effects:</b> The default CRT effects level and sound level. Players can override them from the terminal's settings menu.</li>
                     <li><b>Save:</b> Changes are applied immediately upon saving.</li>
                 </ul>
             </div>
@@ -246,6 +247,22 @@ foreach ($themeResults as $row) {
                             <input type="color" name="prompt_color_path" id="theme_prompt_color_path" style="height: 40px;">
                         </div>
                     </div>
+
+                    <h2 style="margin-top: 2em;">Screen Effects</h2>
+                    <label for="theme_crt_level">Default level for players:</label>
+                    <select name="crt_level" id="theme_crt_level">
+                        <option value="full">Full: scanlines, glow, flicker, darkened edges, rolling band</option>
+                        <option value="subtle">Subtle: light scanlines and glow, nothing moving</option>
+                        <option value="off">Off: plain text</option>
+                    </select>
+
+                    <label for="theme_sound_level" style="margin-top: 1em;">Default sound for players:</label>
+                    <select name="sound_level" id="theme_sound_level">
+                        <option value="off">Off</option>
+                        <option value="low">Low</option>
+                        <option value="high">High</option>
+                    </select>
+                    <p style="margin-top: 0.5em; font-size: 0.9em;">Players can change both of these, and their text speed, from the menu button in the top-right corner of the terminal. Their choice is saved in their own browser. Moving effects are always switched off for players whose system asks for reduced motion. Browsers only play sound after the player first presses a key or taps the page.</p>
 
                     <button type="submit">Save Theme</button>
                 </form>

@@ -45,7 +45,9 @@ INSERT INTO `themes` (`id`, `name`, `value`) VALUES
 (4, 'prompt_color_path', '#bd93f9'),
 (5, 'terminal_title', 'Termi-Story'),
 (6, 'login_greeting', 'PLAYER LOGIN'),
-(7, 'motd', 'Welcome to the system. Type \'help\' for a list of commands.');
+(7, 'motd', 'Welcome to the system. Type \'help\' for a list of commands.'),
+(8, 'crt_level', 'full'),
+(9, 'sound_level', 'off');
 
 -- --------------------------------------------------------
 
@@ -98,7 +100,7 @@ ALTER TABLE `filesystem`
 -- AUTO_INCREMENT for table `themes`
 --
 ALTER TABLE `themes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `users`

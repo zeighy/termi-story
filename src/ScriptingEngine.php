@@ -5,6 +5,16 @@ class ScriptingEngine {
     // Longest pause a single WAIT can request, in milliseconds
     const MAX_WAIT_MS = 30000;
 
+    // Presentation commands. Like WAIT, each becomes a marker line (%%NAME:arg%%) in the
+    // output, which the browser acts on instead of printing. Arguments are checked here,
+    // so a marker only ever carries a known word or a bounded number.
+    const GLITCH_MS = ['default' => 400, 'min' => 100, 'max' => 3000];
+    const SHAKE_MS = ['default' => 500, 'min' => 100, 'max' => 2000];
+    // Must match the sounds in public/sound.js
+    const BEEP_TONES = ['beep', 'high', 'low', 'alert', 'error', 'success', 'static', 'power', 'thud'];
+    const TYPE_PACES = ['slow', 'normal', 'fast'];
+    const TEXT_STYLES = ['normal', 'dim', 'bright', 'warn', 'alert'];
+
     private $variables = [];
     private $output = '';
     private $lines = [];
@@ -48,7 +58,13 @@ class ScriptingEngine {
 
         switch ($command) {
             case 'ECHO':
-                $this->output .= $this->resolveVariables($args) . "\n";
+                $text = $this->resolveVariables($args);
+                // A line that starts with %% would be read as a marker. Prefix a zero-width
+                // space so text (e.g. a variable's value) can never pose as one.
+                if (str_starts_with($text, '%%')) {
+                    $text = "\u{200B}" . $text;
+                }
+                $this->output .= $text . "\n";
                 break;
             case 'SET':
                 $this->handleSet($args);
@@ -69,7 +85,45 @@ class ScriptingEngine {
             case 'FETCH':
                 $this->handleFetch($args);
                 break;
+            case 'CLEAR':
+                $this->marker('CLEAR');
+                break;
+            case 'GLITCH':
+                $this->marker('GLITCH', $this->boundedMs($args, self::GLITCH_MS));
+                break;
+            case 'SHAKE':
+                $this->marker('SHAKE', $this->boundedMs($args, self::SHAKE_MS));
+                break;
+            case 'BEEP':
+                $this->marker('BEEP', $this->pickWord($args, self::BEEP_TONES, 'beep'));
+                break;
+            case 'TYPE':
+                $this->marker('TYPE', $this->pickWord($args, self::TYPE_PACES, 'normal'));
+                break;
+            case 'STYLE':
+                $this->marker('STYLE', $this->pickWord($args, self::TEXT_STYLES, 'normal'));
+                break;
         }
+    }
+
+    /** Append a presentation marker line for the browser. */
+    private function marker($name, $arg = null) {
+        $this->output .= '%%' . $name . ($arg === null ? '' : ':' . $arg) . "%%\n";
+    }
+
+    /** A duration in ms from a command's argument (variables allowed), clamped to its range. */
+    private function boundedMs($args, $range) {
+        $value = trim($this->resolveVariables($args));
+        if ($value === '' || !is_numeric($value)) {
+            return $range['default'];
+        }
+        return max($range['min'], min($range['max'], (int)$value));
+    }
+
+    /** The argument as one of the allowed words (case-insensitive), or the default. */
+    private function pickWord($args, $allowed, $default) {
+        $word = strtolower(trim($this->resolveVariables($args)));
+        return in_array($word, $allowed, true) ? $word : $default;
     }
 
     private function handleFetch($args) {

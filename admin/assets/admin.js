@@ -505,6 +505,8 @@ $(function () {
             document.getElementById('theme_text_color').value = data.text_color || '#00ff00';
             document.getElementById('theme_prompt_color_user').value = data.prompt_color_user || '#50fa7b';
             document.getElementById('theme_prompt_color_path').value = data.prompt_color_path || '#bd93f9';
+            document.getElementById('theme_crt_level').value = data.crt_level || 'full';
+            document.getElementById('theme_sound_level').value = data.sound_level || 'off';
         }
     }
 
